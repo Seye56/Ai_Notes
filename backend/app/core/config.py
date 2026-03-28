@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,7 +8,10 @@ class Settings(BaseSettings):
     project_name: str = "AI Notes App"
     api_v1_prefix: str = "/api"
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("APP_DEBUG", "DEBUG"),
+    )
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     supabase_url: str = ""
@@ -34,6 +37,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        enable_decoding=False,
     )
 
     @field_validator("cors_origins", mode="before")
