@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,8 +13,14 @@ from app.schemas.user import ProfileUpdate
 
 class AuthService:
     @staticmethod
-    def get_profile_by_id(db: Session, user_id: str) -> Profile | None:
-        return db.get(Profile, user_id)
+    def _parse_user_uuid(user_id: str | UUID) -> UUID:
+        if isinstance(user_id, UUID):
+            return user_id
+        return UUID(user_id)
+
+    @staticmethod
+    def get_profile_by_id(db: Session, user_id: str | UUID) -> Profile | None:
+        return db.get(Profile, AuthService._parse_user_uuid(user_id))
 
     @staticmethod
     def bootstrap_profile(db: Session, auth: AuthContext) -> Profile:
@@ -46,7 +53,7 @@ class AuthService:
             )
 
         profile = Profile(
-            id=auth.user_id,
+            id=AuthService._parse_user_uuid(auth.user_id),
             email=email,
             full_name=user_metadata.get("full_name"),
             preferred_language=user_metadata.get("preferred_language", "en"),
@@ -83,7 +90,7 @@ class AuthService:
     def _ensure_profile_from_supabase_user(
         db: Session,
         *,
-        user_id: str,
+        user_id: str | UUID,
         email: str | None,
         user_metadata: dict[str, Any] | None = None,
     ) -> Profile | None:
@@ -94,7 +101,7 @@ class AuthService:
         profile = AuthService.get_profile_by_id(db, user_id)
         if profile is None:
             profile = Profile(
-                id=user_id,
+                id=AuthService._parse_user_uuid(user_id),
                 email=email,
                 full_name=metadata.get("full_name"),
                 preferred_language=metadata.get("preferred_language", "en"),
@@ -143,12 +150,6 @@ class AuthService:
                 detail="Supabase signup did not return a user.",
             )
 
-        profile = AuthService._ensure_profile_from_supabase_user(
-            db,
-            user_id=response.user.id,
-            email=response.user.email,
-            user_metadata=response.user.user_metadata,
-        )
         session = (
             SessionTokens(
                 access_token=response.session.access_token,
@@ -161,14 +162,14 @@ class AuthService:
             else None
         )
         message = (
-            "Signup successful."
+            "Signup successful. Call /api/auth/bootstrap after authenticating to create the app profile."
             if session
             else "Signup successful. Email verification may be required before login."
         )
         return AuthSessionResponse(
             user_id=response.user.id,
             email=response.user.email,
-            profile=profile and profile,
+            profile=None,
             session=session,
             message=message,
         )

@@ -1,4 +1,7 @@
+from uuid import UUID
+
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin
@@ -7,7 +10,7 @@ from app.core.database import Base, TimestampMixin
 class Profile(TimestampMixin, Base):
     __tablename__ = "profiles"
 
-    id: Mapped[str] = mapped_column(primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     preferred_language: Mapped[str] = mapped_column(String(50), default="en", nullable=False)
