@@ -1,4 +1,7 @@
+from uuid import UUID
+
 from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -7,7 +10,12 @@ from app.core.database import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class Note(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "notes"
 
-    owner_id: Mapped[str] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     source_language: Mapped[str] = mapped_column(String(50), default="en", nullable=False)

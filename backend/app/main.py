@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.notes import router as notes_router
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.models import AudioFile, Group, GroupMember, GroupNoteEvent, Note, Profile, Quiz, Summary, Translation
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(notes_router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health")
