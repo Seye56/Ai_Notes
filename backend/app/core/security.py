@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Header, HTTPException, status
-from jose import JWTError, jwt
 
-from app.core.config import settings
+from app.core.supabase import create_supabase_anon_client
 
 
 @dataclass(slots=True)
@@ -31,29 +30,34 @@ def get_bearer_token(authorization: str | None) -> str:
     return token
 
 
-def decode_supabase_jwt(token: str) -> dict[str, Any]:
-    if not settings.supabase_jwt_secret:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="SUPABASE_JWT_SECRET is not configured.",
-        )
-
+def fetch_supabase_user_claims(token: str) -> dict[str, Any]:
+    client = create_supabase_anon_client()
     try:
-        return jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
-        )
-    except JWTError as exc:
+        user_response = client.auth.get_user(token)
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired access token.",
         ) from exc
 
+    user = getattr(user_response, "user", None) if user_response else None
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired access token.",
+        )
+
+    return {
+        "sub": user.id,
+        "email": user.email,
+        "app_metadata": user.app_metadata,
+        "user_metadata": user.user_metadata,
+        "role": user.role,
+    }
+
 
 def build_auth_context(token: str) -> AuthContext:
-    payload = decode_supabase_jwt(token)
+    payload = fetch_supabase_user_claims(token)
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(

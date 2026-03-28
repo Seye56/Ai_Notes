@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_profile
@@ -10,6 +10,35 @@ from app.schemas.note import NoteCreate, NoteRead, NoteUpdate
 from app.services.note_service import NoteService
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+
+@router.post("/impor", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
+async def import_note(
+    title: str | None = Form(default=None),
+    pasted_text: str | None = Form(default=None),
+    source_language: str = Form(default="en"),
+    file: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    current_profile: Profile = Depends(get_current_profile),
+) -> NoteRead:
+    file_content: str | None = None
+    filename: str | None = None
+
+    if file is not None:
+        filename = file.filename or "import.txt"
+        raw_content = await file.read()
+        file_content = NoteService.extract_import_text(filename, raw_content)
+
+    note = NoteService.import_note(
+        db,
+        current_profile,
+        pasted_text=pasted_text,
+        file_content=file_content,
+        filename=filename,
+        title=title,
+        source_language=source_language,
+    )
+    return NoteRead.model_validate(note)
 
 
 @router.post("", response_model=NoteRead, status_code=status.HTTP_201_CREATED)
