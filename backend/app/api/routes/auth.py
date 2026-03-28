@@ -5,11 +5,39 @@ from app.api.deps import get_auth_context, get_current_profile
 from app.core.database import get_db
 from app.core.security import AuthContext
 from app.models.user import Profile
-from app.schemas.auth import AuthBootstrapResponse
+from app.schemas.auth import (
+    AuthBootstrapResponse,
+    AuthSessionResponse,
+    LoginRequest,
+    LogoutResponse,
+    SignUpRequest,
+)
 from app.schemas.user import ProfileRead, ProfileUpdate
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/signup", response_model=AuthSessionResponse, status_code=201)
+def sign_up(
+    payload: SignUpRequest,
+    db: Session = Depends(get_db),
+) -> AuthSessionResponse:
+    return AuthService.sign_up(db, payload)
+
+
+@router.post("/login", response_model=AuthSessionResponse)
+def log_in(
+    payload: LoginRequest,
+    db: Session = Depends(get_db),
+) -> AuthSessionResponse:
+    return AuthService.log_in(db, payload)
+
+
+@router.post("/logout", response_model=LogoutResponse)
+def log_out(auth: AuthContext = Depends(get_auth_context)) -> LogoutResponse:
+    AuthService.log_out(auth.access_token)
+    return LogoutResponse(message="Logout successful.")
 
 
 @router.post("/bootstrap", response_model=AuthBootstrapResponse)

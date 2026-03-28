@@ -15,14 +15,22 @@ def _build_client(api_key: str) -> Client:
     return create_client(settings.supabase_url, api_key)
 
 
+def create_supabase_anon_client() -> Client:
+    return _build_client(settings.supabase_anon_key)
+
+
+def create_supabase_admin_client() -> Client:
+    return _build_client(settings.supabase_service_role_key)
+
+
 @lru_cache
 def get_supabase_anon_client() -> Client:
-    return _build_client(settings.supabase_anon_key)
+    return create_supabase_anon_client()
 
 
 @lru_cache
 def get_supabase_admin_client() -> Client:
-    return _build_client(settings.supabase_service_role_key)
+    return create_supabase_admin_client()
 
 
 def build_storage_public_url(bucket: str, path: str) -> str:
