@@ -40,6 +40,22 @@ class QuizService:
         return quiz
 
     @staticmethod
+    def get_quiz_or_404(
+        db: Session,
+        owner: Profile,
+        quiz_id: str | UUID,
+    ) -> Quiz:
+        quiz = db.get(Quiz, quiz_id)
+        if quiz is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Quiz not found.",
+            )
+
+        NoteService.get_note_or_404(db, owner, quiz.note_id)
+        return quiz
+
+    @staticmethod
     def _generate_questions(
         *,
         text: str,

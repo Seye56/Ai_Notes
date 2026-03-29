@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -15,6 +15,13 @@ class QuizQuestion(BaseModel):
     options: list[str]
     answer: str
     explanation: str | None = None
+
+
+class QuizSpeakRequest(BaseModel):
+    voice_id: str | None = None
+    gender: Literal["male", "female"] | None = None
+    mood: str | None = "interactive"
+    language: str | None = None
 
 
 class QuizRead(BaseModel):

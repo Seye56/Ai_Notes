@@ -25,9 +25,14 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = ""
     elevenlabs_base_url: str = "https://api.elevenlabs.io/v1"
     elevenlabs_default_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
+    elevenlabs_default_language: str = "en"
+    elevenlabs_default_mood: str = "normal"
+    elevenlabs_interactive_model: str = "eleven_flash_v2_5"
+    elevenlabs_narration_model: str = "eleven_multilingual_v2"
 
     supabase_audio_bucket: str = "audio-files"
     supabase_imports_bucket: str = "note-imports"
+    supabase_signed_url_expires_in: int = 3600
 
     database_echo: bool = False
     auto_create_tables: bool = False
