@@ -1,3 +1,5 @@
+import { languageOptions } from '../../utils/languageMap'
+
 const NoteEditor = ({ note, onChange, readOnly = false }) => {
   return (
     <div className="panel rounded-[28px] p-6 space-y-5">
@@ -15,14 +17,18 @@ const NoteEditor = ({ note, onChange, readOnly = false }) => {
         </label>
         <label className="space-y-2">
           <span className="text-sm font-semibold text-soft">Language</span>
-          <input
-            type="text"
+          <select
             value={note.source_language}
             disabled={readOnly}
             onChange={(event) => onChange('source_language', event.target.value)}
-            className="input-field"
-            placeholder="en"
-          />
+            className="select-field"
+          >
+            {languageOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 

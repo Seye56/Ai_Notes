@@ -24,7 +24,6 @@ const StudyMode = () => {
     generateSpeech,
   } = useStudyStore()
 
-  const [summaryStyle, setSummaryStyle] = useState('concise')
   const [targetLanguage, setTargetLanguage] = useState('es')
   const [speechForm, setSpeechForm] = useState({
     source_type: 'note',
@@ -71,28 +70,21 @@ const StudyMode = () => {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-main">Summary</h2>
-                  <p className="text-sm text-muted">Turn the note into a concise study brief.</p>
+                  <p className="text-sm text-muted">Generate a study-ready summary from the note.</p>
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    value={summaryStyle}
-                    onChange={(event) => setSummaryStyle(event.target.value)}
-                    className="input-field !w-auto !px-3 !py-2 text-sm"
-                  />
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await summarizeNote(id, { style: summaryStyle })
-                        toast.success('Summary generated.')
-                      } catch (error) {
-                        toast.error(error.message)
-                      }
-                    }}
-                    disabled={loading}
-                  >
-                    Generate
-                  </Button>
-                </div>
+                <Button
+                  onClick={async () => {
+                    try {
+                      await summarizeNote(id, {})
+                      toast.success('Summary generated.')
+                    } catch (error) {
+                      toast.error(error.message)
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  Generate
+                </Button>
               </div>
               <div className="panel-soft mt-5 rounded-3xl p-5 text-sm leading-7 text-soft whitespace-pre-wrap">
                 {summary?.summary_text || 'No summary yet. Generate one from this note.'}

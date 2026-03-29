@@ -1,4 +1,5 @@
 import { acceptedImportTypes, getFileDisplayName } from '../../utils/fileParser'
+import { languageOptions } from '../../utils/languageMap'
 import Button from '../ui/Button'
 
 const NoteImport = ({
@@ -28,13 +29,17 @@ const NoteImport = ({
           placeholder="Optional title"
           className="input-field"
         />
-        <input
-          type="text"
+        <select
           value={sourceLanguage}
           onChange={(event) => onLanguageChange(event.target.value)}
-          placeholder="en"
-          className="input-field"
-        />
+          className="select-field"
+        >
+          {languageOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <textarea

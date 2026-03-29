@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react'
+import { Check, MoreHorizontal } from 'lucide-react'
 
 const colorMap = {
   blue: 'linear-gradient(135deg, rgba(96, 165, 250, 0.22), rgba(191, 219, 254, 0.14))',
@@ -8,14 +8,22 @@ const colorMap = {
   purple: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(221, 214, 254, 0.12))',
 }
 
-const NoteCard = ({ title, excerpt, date, color = 'blue', onClick }) => {
+const NoteCard = ({
+  title,
+  excerpt,
+  date,
+  color = 'blue',
+  onClick,
+  selectable = false,
+  selected = false,
+}) => {
   return (
     <div
       onClick={onClick}
-      className="rounded-2xl p-4 cursor-pointer border transition-all duration-200 flex flex-col gap-2 hover:-translate-y-1"
+      className={`rounded-2xl p-4 cursor-pointer border transition-all duration-200 flex flex-col gap-2 hover:-translate-y-1 ${selected ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-transparent' : ''}`}
       style={{
         background: colorMap[color] ?? colorMap.blue,
-        borderColor: 'var(--border-soft)',
+        borderColor: selected ? 'var(--accent)' : 'var(--border-soft)',
         boxShadow: 'var(--shadow-card)',
       }}
     >
@@ -23,12 +31,21 @@ const NoteCard = ({ title, excerpt, date, color = 'blue', onClick }) => {
         <span className="text-xs font-medium text-muted uppercase tracking-wide">
           {date ?? 'No date'}
         </span>
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="text-muted hover:text-main transition"
-        >
-          <MoreHorizontal size={16} />
-        </button>
+        {selectable ? (
+          <div
+            className={`flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'bg-[var(--accent)] text-white' : 'bg-[var(--surface)] text-transparent'}`}
+            style={{ borderColor: selected ? 'var(--accent)' : 'var(--border-soft)' }}
+          >
+            <Check size={14} />
+          </div>
+        ) : (
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="text-muted hover:text-main transition"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        )}
       </div>
 
       <h3 className="font-bold text-main text-base">{title}</h3>
