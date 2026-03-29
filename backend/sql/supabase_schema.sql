@@ -99,6 +99,19 @@ create table if not exists public.group_note_events (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.group_presences (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.groups (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  cursor_position integer,
+  selection_start integer,
+  selection_end integer,
+  is_typing boolean not null default false,
+  last_seen timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint uq_group_presences_group_user unique (group_id, user_id)
+);
+
 create index if not exists idx_profiles_email on public.profiles (email);
 create index if not exists idx_notes_owner_id on public.notes (owner_id);
 create index if not exists idx_translations_note_id on public.translations (note_id);
@@ -111,6 +124,8 @@ create index if not exists idx_group_members_group_id on public.group_members (g
 create index if not exists idx_group_members_user_id on public.group_members (user_id);
 create index if not exists idx_group_events_group_id on public.group_note_events (group_id);
 create index if not exists idx_group_events_sender_id on public.group_note_events (sender_id);
+create index if not exists idx_group_presences_group_id on public.group_presences (group_id);
+create index if not exists idx_group_presences_user_id on public.group_presences (user_id);
 
 drop trigger if exists trg_profiles_set_updated_at on public.profiles;
 create trigger trg_profiles_set_updated_at
@@ -124,6 +139,12 @@ before update on public.notes
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists trg_group_presences_set_updated_at on public.group_presences;
+create trigger trg_group_presences_set_updated_at
+before update on public.group_presences
+for each row
+execute function public.set_updated_at();
+
 alter table public.profiles enable row level security;
 alter table public.notes enable row level security;
 alter table public.translations enable row level security;
@@ -133,6 +154,7 @@ alter table public.audio_files enable row level security;
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
 alter table public.group_note_events enable row level security;
+alter table public.group_presences enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -395,6 +417,68 @@ with check (
           select 1
           from public.group_members gm
           where gm.group_id = group_note_events.group_id
+            and gm.user_id = auth.uid()
+        )
+      )
+  )
+);
+
+drop policy if exists "group_presences_members_read" on public.group_presences;
+create policy "group_presences_members_read"
+on public.group_presences
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.groups g
+    where g.id = group_presences.group_id
+      and (
+        g.owner_id = auth.uid()
+        or exists (
+          select 1
+          from public.group_members gm
+          where gm.group_id = group_presences.group_id
+            and gm.user_id = auth.uid()
+        )
+      )
+  )
+);
+
+drop policy if exists "group_presences_self_manage" on public.group_presences;
+create policy "group_presences_self_manage"
+on public.group_presences
+for all
+to authenticated
+using (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.groups g
+    where g.id = group_presences.group_id
+      and (
+        g.owner_id = auth.uid()
+        or exists (
+          select 1
+          from public.group_members gm
+          where gm.group_id = group_presences.group_id
+            and gm.user_id = auth.uid()
+        )
+      )
+  )
+)
+with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.groups g
+    where g.id = group_presences.group_id
+      and (
+        g.owner_id = auth.uid()
+        or exists (
+          select 1
+          from public.group_members gm
+          where gm.group_id = group_presences.group_id
             and gm.user_id = auth.uid()
         )
       )

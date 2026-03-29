@@ -1,5 +1,5 @@
 from app.models.audio import AudioFile
-from app.models.group import Group, GroupMember, GroupNoteEvent
+from app.models.group import Group, GroupMember, GroupNoteEvent, GroupPresence
 from app.models.note import Note
 from app.models.quiz import Quiz
 from app.models.summary import Summary
@@ -11,6 +11,7 @@ __all__ = [
     "Group",
     "GroupMember",
     "GroupNoteEvent",
+    "GroupPresence",
     "Note",
     "Profile",
     "Quiz",
