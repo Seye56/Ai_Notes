@@ -1,37 +1,6 @@
-import { languageOptions } from '../../utils/languageMap'
-
 const NoteEditor = ({ note, onChange, readOnly = false }) => {
   return (
     <div className="panel rounded-[28px] p-6 space-y-5">
-      <div className="grid gap-4 md:grid-cols-[1.5fr,180px]">
-        <label className="space-y-2">
-          <span className="text-sm font-semibold text-soft">Title</span>
-          <input
-            type="text"
-            value={note.title}
-            disabled={readOnly}
-            onChange={(event) => onChange('title', event.target.value)}
-            className="input-field"
-            placeholder="Name your note"
-          />
-        </label>
-        <label className="space-y-2">
-          <span className="text-sm font-semibold text-soft">Language</span>
-          <select
-            value={note.source_language}
-            disabled={readOnly}
-            onChange={(event) => onChange('source_language', event.target.value)}
-            className="select-field"
-          >
-            {languageOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
       <label className="block space-y-2">
         <span className="text-sm font-semibold text-soft">Content</span>
         <textarea

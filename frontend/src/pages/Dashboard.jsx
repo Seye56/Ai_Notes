@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { CalendarDays, Flame, Plus, Sparkles } from 'lucide-react'
+import CreateNoteModal from '../components/notes/CreateNoteModal'
 import NoteList from '../components/notes/NoteList'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
@@ -35,8 +36,9 @@ const formatLoginDate = (value) =>
 
 const Dashboard = () => {
   const navigate = useNavigate()
-  const { notes, loading, fetchNotes, createNote } = useNoteStore()
+  const { notes, loading, saving, fetchNotes, createNote } = useNoteStore()
   const { habitStats, profile } = useUserStore()
+  const [createOpen, setCreateOpen] = useState(false)
 
   const quoteIndex = Math.abs((habitStats.streak || 0) + (habitStats.totalLogins || 0)) % inspirationQuotes.length
   const inspirationQuote = inspirationQuotes[quoteIndex]
@@ -46,13 +48,14 @@ const Dashboard = () => {
     fetchNotes().catch(() => {})
   }, [fetchNotes])
 
-  const handleCreateNote = async () => {
+  const handleCreateNote = async (title) => {
     try {
       const note = await createNote({
-        title: 'Untitled Note',
+        title,
         content: '',
-        source_language: 'en',
+        source_language: profile?.preferred_language || 'en',
       })
+      setCreateOpen(false)
       navigate(`/note/${note.id}`)
     } catch (error) {
       toast.error(error.message)
@@ -66,7 +69,7 @@ const Dashboard = () => {
           <p className="text-xs uppercase tracking-[0.25em] text-[var(--accent)]">Workspace overview</p>
           <h1 className="mt-4 text-3xl font-bold text-main">Build notes once, then translate, summarize, quiz, speak, and collaborate from the same source.</h1>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button onClick={handleCreateNote}>
+            <Button onClick={() => setCreateOpen(true)}>
               <Plus size={16} />
               New note
             </Button>
@@ -149,10 +152,18 @@ const Dashboard = () => {
         ) : (
           <NoteList
             notes={notes.slice(0, 6)}
+            onCreate={() => setCreateOpen(true)}
             onSelect={(note) => navigate(`/note/${note.id}`)}
           />
         )}
       </section>
+
+      <CreateNoteModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateNote}
+        busy={saving}
+      />
     </div>
   )
 }

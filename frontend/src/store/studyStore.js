@@ -1,10 +1,65 @@
 import { create } from 'zustand'
 import { aiApi, buildGroupSocketUrl, extractErrorMessage, getApiAccessToken, groupsApi, speechApi } from '../services/api'
 
+const getSummaryStorageKey = (userId) => `ai_notes_summaries:${userId}`
+const getQuizStorageKey = (userId) => `ai_notes_quizzes:${userId}`
+
+const parseSummaries = (userId) => {
+  if (!userId) {
+    return []
+  }
+
+  const raw = localStorage.getItem(getSummaryStorageKey(userId))
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const persistSummaries = (userId, summaries) => {
+  if (!userId) {
+    return
+  }
+  localStorage.setItem(getSummaryStorageKey(userId), JSON.stringify(summaries))
+}
+
+const parseQuizzes = (userId) => {
+  if (!userId) {
+    return []
+  }
+
+  const raw = localStorage.getItem(getQuizStorageKey(userId))
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+const persistQuizzes = (userId, quizzes) => {
+  if (!userId) {
+    return
+  }
+  localStorage.setItem(getQuizStorageKey(userId), JSON.stringify(quizzes))
+}
+
 export const useStudyStore = create((set, get) => ({
   summary: null,
+  summaries: [],
   translation: null,
   quiz: null,
+  quizzes: [],
   audio: null,
   voices: [],
   moods: [],
@@ -28,12 +83,54 @@ export const useStudyStore = create((set, get) => ({
     }
   },
 
+  hydrateSummaries: (userId) => {
+    const summaries = parseSummaries(userId)
+    set({ summaries })
+    return summaries
+  },
+
+  hydrateQuizzes: (userId) => {
+    const quizzes = parseQuizzes(userId)
+    set({ quizzes })
+    return quizzes
+  },
+
   summarizeNote: async (noteId, payload) => {
     set({ loading: true, error: null })
     try {
       const summary = await aiApi.summarize(noteId, payload)
       set({ summary, loading: false })
       return summary
+    } catch (error) {
+      const message = extractErrorMessage(error, 'Unable to summarize note.')
+      set({ loading: false, error: message })
+      throw new Error(message)
+    }
+  },
+
+  summarizeAndStore: async ({ userId, note, folderName = null }) => {
+    set({ loading: true, error: null })
+    try {
+      const summary = await aiApi.summarize(note.id, {})
+      const entry = {
+        id: summary.id,
+        note_id: note.id,
+        note_title: note.title,
+        summary_text: summary.summary_text,
+        model_used: summary.model_used,
+        created_at: summary.created_at,
+        source_language: note.source_language,
+        folder_name: folderName,
+      }
+
+      const existing = parseSummaries(userId).filter((item) => item.note_id !== note.id)
+      const next = [entry, ...existing].sort(
+        (left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime()
+      )
+
+      persistSummaries(userId, next)
+      set({ summary, summaries: next, loading: false })
+      return entry
     } catch (error) {
       const message = extractErrorMessage(error, 'Unable to summarize note.')
       set({ loading: false, error: message })
@@ -60,6 +157,36 @@ export const useStudyStore = create((set, get) => ({
       const quiz = await aiApi.quiz(noteId, payload)
       set({ quiz, loading: false })
       return quiz
+    } catch (error) {
+      const message = extractErrorMessage(error, 'Unable to generate quiz.')
+      set({ loading: false, error: message })
+      throw new Error(message)
+    }
+  },
+
+  generateAndStoreQuiz: async ({ userId, note, folderName = null, payload }) => {
+    set({ loading: true, error: null })
+    try {
+      const quiz = await aiApi.quiz(note.id, payload)
+      const entry = {
+        id: quiz.id,
+        note_id: note.id,
+        note_title: note.title,
+        questions_json: quiz.questions_json,
+        difficulty: quiz.difficulty,
+        created_at: quiz.created_at,
+        source_language: note.source_language,
+        folder_name: folderName,
+      }
+
+      const existing = parseQuizzes(userId).filter((item) => item.note_id !== note.id)
+      const next = [entry, ...existing].sort(
+        (left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime()
+      )
+
+      persistQuizzes(userId, next)
+      set({ quiz, quizzes: next, loading: false })
+      return entry
     } catch (error) {
       const message = extractErrorMessage(error, 'Unable to generate quiz.')
       set({ loading: false, error: message })

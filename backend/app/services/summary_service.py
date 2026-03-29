@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +10,8 @@ from app.models.summary import Summary
 from app.models.user import Profile
 from app.schemas.summary import SummaryCreate
 from app.services.note_service import NoteService
+
+logger = logging.getLogger(__name__)
 
 
 class SummaryService:
@@ -72,27 +75,33 @@ class SummaryService:
             f"Note:\n{text}"
         )
 
-        try:
-            response = client.messages.create(
-                model=settings.claude_model,
-                max_tokens=max(1024, min(4096, len(text) * 2)),
-                temperature=0.2,
-                system="You create concise academic summaries and key points for note-taking apps.",
-                messages=[{"role": "user", "content": prompt}],
-            )
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Summary provider error: {exc}",
-            ) from exc
+        provider_errors: list[str] = []
 
-        summary_text = SummaryService._extract_text_from_claude_response(response)
-        if not summary_text.strip():
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Summary provider returned empty content.",
-            )
-        return summary_text.strip()
+        for model_name in SummaryService._candidate_models():
+            try:
+                response = client.messages.create(
+                    model=model_name,
+                    max_tokens=max(1024, min(4096, len(text) * 2)),
+                    temperature=0.2,
+                    system="You create concise academic summaries and key points for note-taking apps.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                summary_text = SummaryService._extract_text_from_claude_response(response)
+                if not summary_text.strip():
+                    message = f"{model_name}: empty content"
+                    provider_errors.append(message)
+                    logger.warning("Summary generation returned empty content for model %s", model_name)
+                    continue
+                return summary_text.strip()
+            except Exception as exc:
+                message = f"{model_name}: {exc}"
+                provider_errors.append(message)
+                logger.exception("Summary generation failed for model %s", model_name)
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Summary provider error: {' | '.join(provider_errors)}",
+        )
 
     @staticmethod
     def _extract_text_from_claude_response(response: Any) -> str:
@@ -102,3 +111,15 @@ class SummaryService:
             if text:
                 parts.append(text)
         return "\n".join(parts)
+
+    @staticmethod
+    def _candidate_models() -> list[str]:
+        ordered = [settings.claude_model, *settings.claude_fallback_models]
+        seen: set[str] = set()
+        candidates: list[str] = []
+        for model_name in ordered:
+            if not model_name or model_name in seen:
+                continue
+            seen.add(model_name)
+            candidates.append(model_name)
+        return candidates

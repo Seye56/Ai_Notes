@@ -22,6 +22,10 @@ class Settings(BaseSettings):
 
     claude_api_key: str = ""
     claude_model: str = "claude-3-5-sonnet-latest"
+    claude_fallback_models: list[str] = [
+        "claude-haiku-4-5-20251001",
+        "claude-3-haiku-20240307",
+    ]
     elevenlabs_api_key: str = ""
     elevenlabs_base_url: str = "https://api.elevenlabs.io/v1"
     elevenlabs_default_voice_id: str = "EXAVITQu4vr4xnSDxMaL"
@@ -53,6 +57,15 @@ class Settings(BaseSettings):
         if not value:
             return []
         return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+    @field_validator("claude_fallback_models", mode="before")
+    @classmethod
+    def parse_claude_fallback_models(cls, value: str | list[str]) -> list[str]:
+        if isinstance(value, list):
+            return [item.strip() for item in value if str(item).strip()]
+        if not value:
+            return []
+        return [model.strip() for model in value.split(",") if model.strip()]
 
 
 @lru_cache

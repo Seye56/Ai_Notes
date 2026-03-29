@@ -1,37 +1,64 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { MoreHorizontal, Plus, Trash2, X } from 'lucide-react'
+import { FolderOpen, MoreHorizontal, Plus, Trash2, X } from 'lucide-react'
+import CreateNoteModal from '../components/notes/CreateNoteModal'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
 import Modal from '../components/ui/Modal'
 import NoteImport from '../components/notes/NoteImport'
 import NoteList from '../components/notes/NoteList'
 import { useNoteStore } from '../store/noteStore'
+import { useUserStore } from '../store/userStore'
 
 const NotesPage = () => {
   const navigate = useNavigate()
-  const { notes, loading, saving, fetchNotes, importNote, createNote, deleteNote } = useNoteStore()
+  const { profile } = useUserStore()
+  const {
+    notes,
+    folders,
+    loading,
+    saving,
+    fetchNotes,
+    importNote,
+    createNote,
+    deleteNote,
+    hydrateFolders,
+    createFolder,
+    moveNotesToFolder,
+    deleteFolder,
+  } = useNoteStore()
   const [importOpen, setImportOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [foldersOpen, setFoldersOpen] = useState(false)
   const [importTitle, setImportTitle] = useState('')
   const [pastedText, setPastedText] = useState('')
   const [sourceLanguage, setSourceLanguage] = useState('en')
   const [file, setFile] = useState(null)
+  const [folderName, setFolderName] = useState('')
   const [actionsOpen, setActionsOpen] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedNotes, setSelectedNotes] = useState([])
+  const [selectedFolderId, setSelectedFolderId] = useState(null)
 
   useEffect(() => {
     fetchNotes().catch(() => {})
   }, [fetchNotes])
 
-  const handleCreateNote = async () => {
+  useEffect(() => {
+    if (profile?.id) {
+      hydrateFolders(profile.id)
+    }
+  }, [hydrateFolders, profile?.id])
+
+  const handleCreateNote = async (title) => {
     try {
       const note = await createNote({
-        title: 'Untitled Note',
+        title,
         content: '',
-        source_language: 'en',
+        source_language: profile?.preferred_language || 'en',
       })
+      setCreateOpen(false)
       navigate(`/note/${note.id}`)
     } catch (error) {
       toast.error(error.message)
@@ -69,6 +96,11 @@ const NotesPage = () => {
     setImportOpen(true)
   }
 
+  const handleOpenFolders = () => {
+    setActionsOpen(false)
+    setFoldersOpen(true)
+  }
+
   const handleOpenSelectionMode = () => {
     setActionsOpen(false)
     setSelectionMode(true)
@@ -99,12 +131,79 @@ const NotesPage = () => {
     }
   }
 
+  const handleCreateFolder = () => {
+    try {
+      const folder = createFolder(profile?.id, folderName)
+      setFolderName('')
+      toast.success(`${folder.name} created.`)
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const handleMoveSelectedToFolder = (folderId) => {
+    try {
+      moveNotesToFolder(profile?.id, selectedNotes, folderId)
+      toast.success(folderId ? 'Notes moved to folder.' : 'Notes moved back to notes.')
+      handleExitSelectionMode()
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const handleDeleteFolder = async (folder) => {
+    const moveToNotes = window.confirm(
+      `Delete "${folder.name}"?\n\nPress OK to move its notes back to My Notes.\nPress Cancel if you want to choose the delete-everything option next.`
+    )
+
+    if (moveToNotes) {
+      try {
+        await deleteFolder(profile?.id, folder.id, 'move')
+        if (selectedFolderId === folder.id) {
+          setSelectedFolderId(null)
+        }
+        toast.success(`Folder deleted. Notes moved back to My Notes.`)
+      } catch (error) {
+        toast.error(error.message)
+      }
+      return
+    }
+
+    const deleteEverything = window.confirm(
+      `Delete "${folder.name}" and every note inside it? This cannot be undone.`
+    )
+
+    if (!deleteEverything) {
+      return
+    }
+
+    try {
+      await deleteFolder(profile?.id, folder.id, 'delete')
+      if (selectedFolderId === folder.id) {
+        setSelectedFolderId(null)
+      }
+      toast.success(`Folder and its notes deleted.`)
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const notesInSelectedFolder = selectedFolderId
+    ? notes.filter((note) => folders.find((folder) => folder.id === selectedFolderId)?.noteIds.includes(note.id))
+    : notes.filter((note) => !folders.some((folder) => folder.noteIds.includes(note.id)))
+
+  const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-main">My Notes</h1>
-          <p className="text-sm text-muted">Manage imported files, typed notes, and study material in one place.</p>
+          <p className="text-sm text-muted">
+            {selectedFolder
+              ? `Viewing ${selectedFolder.name}. Move notes in and out whenever you need.`
+              : 'Manage imported files, typed notes, and study material in one place.'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {selectionMode ? (
@@ -112,6 +211,28 @@ const NotesPage = () => {
               <div className="glass-chip rounded-full px-4 py-2 text-sm font-medium text-main">
                 {selectedNotes.length} selected
               </div>
+              {folders.length ? (
+                <select
+                  className="select-field w-auto min-w-[12rem]"
+                  defaultValue=""
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      handleMoveSelectedToFolder(event.target.value)
+                      event.target.value = ''
+                    }
+                  }}
+                >
+                  <option value="" disabled>Move to folder</option>
+                  {folders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <Button variant="secondary" onClick={() => handleMoveSelectedToFolder(null)} disabled={!selectedNotes.length}>
+                Move to notes
+              </Button>
               <Button variant="danger" onClick={handleDeleteSelected} disabled={!selectedNotes.length || saving}>
                 <Trash2 size={16} />
                 Delete selected
@@ -125,7 +246,7 @@ const NotesPage = () => {
             <>
               <Button
                 className="h-12 w-12 rounded-full px-0"
-                onClick={handleCreateNote}
+                onClick={() => setCreateOpen(true)}
                 aria-label="Create note"
               >
                 <Plus size={20} />
@@ -155,6 +276,13 @@ const NotesPage = () => {
                     >
                       Select notes
                     </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenFolders}
+                      className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
+                    >
+                      Folders
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -163,14 +291,34 @@ const NotesPage = () => {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSelectedFolderId(null)}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === null ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+        >
+          My Notes
+        </button>
+        {folders.map((folder) => (
+          <button
+            key={folder.id}
+            type="button"
+            onClick={() => setSelectedFolderId(folder.id)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === folder.id ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+          >
+            {folder.name} ({folder.noteIds.length})
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="panel rounded-[28px] p-6">
           <Loader label="Loading notes..." />
         </div>
       ) : (
         <NoteList
-          notes={notes}
-          onCreate={handleCreateNote}
+          notes={notesInSelectedFolder}
+          onCreate={() => setCreateOpen(true)}
           selectable={selectionMode}
           selectedIds={selectedNotes}
           onToggleSelect={toggleSelection}
@@ -191,6 +339,68 @@ const NotesPage = () => {
           onSubmit={handleImport}
           busy={saving}
         />
+      </Modal>
+
+      <CreateNoteModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateNote}
+        busy={saving}
+      />
+
+      <Modal open={foldersOpen} title="Manage folders" onClose={() => setFoldersOpen(false)}>
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              className="input-field"
+              placeholder="New folder name"
+              value={folderName}
+              onChange={(event) => setFolderName(event.target.value)}
+            />
+            <Button onClick={handleCreateFolder}>
+              <FolderOpen size={16} />
+              Create folder
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {folders.length ? (
+              folders.map((folder) => (
+                <div key={folder.id} className="panel-soft rounded-2xl p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-main">{folder.name}</p>
+                      <p className="text-sm text-muted">{folder.noteIds.length} note{folder.noteIds.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setSelectedFolderId(folder.id)
+                          setFoldersOpen(false)
+                        }}
+                      >
+                        Open
+                      </Button>
+                      {selectionMode && selectedNotes.length ? (
+                        <Button variant="ghost" onClick={() => handleMoveSelectedToFolder(folder.id)}>
+                          Move selected here
+                        </Button>
+                      ) : null}
+                      <Button variant="danger" onClick={() => handleDeleteFolder(folder)}>
+                        Delete folder
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="panel-soft rounded-2xl p-4 text-sm text-muted">
+                No folders yet. Create one to organize notes separately from your main notes list.
+              </div>
+            )}
+          </div>
+        </div>
       </Modal>
     </div>
   )

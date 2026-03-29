@@ -1,20 +1,21 @@
 import { useEffect } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { BookOpen, Brain, FileText, LogOut, Settings, Users } from 'lucide-react'
+import { BookOpen, Brain, FileText, LogOut, Settings, Sparkles, Users } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import { useUserStore } from '../../store/userStore'
-
-const navLinks = [
-  { to: '/', label: 'Dashboard', icon: Brain },
-  { to: '/notes', label: 'My Notes', icon: FileText },
-  { to: '/groups', label: 'Groups', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings },
-]
 
 const Layout = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { profile, initialized, hydrateSession, logout } = useUserStore()
+  const navLinks = [
+    { to: '/', label: 'Dashboard', icon: Brain },
+    { to: '/notes', label: 'My Notes', icon: FileText },
+    { to: '/summary', label: 'Summary', icon: Sparkles },
+    { to: '/quiz', label: 'Quiz', icon: BookOpen },
+    { to: '/groups', label: 'Groups', icon: Users },
+    { to: '/settings', label: 'Settings', icon: Settings },
+  ]
 
   useEffect(() => {
     hydrateSession()
@@ -47,7 +48,11 @@ const Layout = () => {
 
         <nav className="flex flex-col gap-1">
           {navLinks.map(({ to, label, icon: Icon }) => {
-            const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`)
+            const isActive =
+              location.pathname === to ||
+              location.pathname.startsWith(`${to}/`) ||
+              (label === 'Summary' && (location.pathname === '/summary' || location.pathname.includes('/study'))) ||
+              (label === 'Quiz' && location.pathname.includes('/quiz'))
             return (
               <Link
                 key={to}
