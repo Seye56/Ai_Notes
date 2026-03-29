@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.supabase import create_supabase_admin_client
 from app.models.audio import AudioFile
-from app.models.note import Note
 from app.models.quiz import Quiz
 from app.models.summary import Summary
 from app.models.user import Profile
