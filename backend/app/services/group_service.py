@@ -236,11 +236,12 @@ class GroupService:
     ) -> GroupMember:
         group = GroupService.get_group_or_404(db, owner, group_id)
         GroupService._require_group_manager(db, owner, group)
+        profile = GroupService._resolve_member_profile(db, payload)
 
         existing = db.scalar(
             select(GroupMember).where(
                 GroupMember.group_id == group.id,
-                GroupMember.user_id == payload.user_id,
+                GroupMember.user_id == profile.id,
             )
         )
         if existing:
@@ -249,19 +250,29 @@ class GroupService:
                 detail="User is already a member of this group.",
             )
 
-        profile = db.get(Profile, payload.user_id)
-        if profile is None:
-            raise HTTPException(status_code=404, detail="User profile not found.")
-
         member = GroupMember(
             group_id=group.id,
-            user_id=payload.user_id,
+            user_id=profile.id,
             role=payload.role,
         )
         db.add(member)
         db.commit()
         db.refresh(member)
         return member
+
+    @staticmethod
+    def _resolve_member_profile(db: Session, payload: GroupMemberAdd) -> Profile:
+        if payload.user_id is not None:
+            profile = db.get(Profile, payload.user_id)
+        else:
+            profile = db.scalar(
+                select(Profile).where(Profile.email.ilike((payload.email or "").strip()))
+            )
+
+        if profile is None:
+            raise HTTPException(status_code=404, detail="User profile not found.")
+
+        return profile
 
     @staticmethod
     def remove_member(

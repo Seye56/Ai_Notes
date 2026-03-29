@@ -118,6 +118,10 @@ export const aiApi = {
     const response = await api.post(`/notes/${noteId}/quiz`, payload)
     return response.data
   },
+  translateText: async (payload) => {
+    const response = await api.post('/translations/text', payload)
+    return response.data
+  },
 }
 
 export const speechApi = {

@@ -14,6 +14,7 @@ from app.models.summary import Summary
 from app.models.user import Profile
 from app.schemas.audio import RegistryOption, SpeechGenerateRequest
 from app.services.note_service import NoteService
+from app.services.translation_service import TranslationService
 
 
 VOICE_REGISTRY: dict[str, dict[str, str]] = {
@@ -135,8 +136,13 @@ class ElevenLabsService:
         owner: Profile,
         payload: SpeechGenerateRequest,
     ) -> tuple[AudioFile, str | None]:
-        text, related_note_id = ElevenLabsService._resolve_source_text(db, owner, payload)
+        text, related_note_id, source_language = ElevenLabsService._resolve_source_text(db, owner, payload)
         language = payload.language or owner.preferred_language or settings.elevenlabs_default_language
+        text_for_speech = ElevenLabsService._translate_for_speech_if_needed(
+            text=text,
+            source_language=source_language,
+            target_language=language,
+        )
         mood_id = payload.mood or settings.elevenlabs_default_mood
         mood = ElevenLabsService._resolve_mood(mood_id)
         voice_id = ElevenLabsService._resolve_voice_id(
@@ -147,7 +153,7 @@ class ElevenLabsService:
         )
 
         audio_bytes = ElevenLabsService._request_tts_audio(
-            text=text,
+            text=text_for_speech,
             voice_id=voice_id,
             model_id=str(mood["model_id"]),
             voice_settings=dict(mood["voice_settings"]),
@@ -161,7 +167,7 @@ class ElevenLabsService:
             voice_id=voice_id,
             provider="elevenlabs",
             file_path=file_path,
-            transcript=text,
+            transcript=text_for_speech,
             language=language,
         )
         db.add(audio_file)
@@ -174,9 +180,9 @@ class ElevenLabsService:
         db: Session,
         owner: Profile,
         payload: SpeechGenerateRequest,
-    ) -> tuple[str, UUID | None]:
+    ) -> tuple[str, UUID | None, str | None]:
         if payload.source_type == "text":
-            return payload.text or "", None
+            return payload.text or "", None, payload.source_language
 
         source_id = payload.source_id
         if source_id is None:
@@ -187,7 +193,7 @@ class ElevenLabsService:
 
         if payload.source_type == "note":
             note = NoteService.get_note_or_404(db, owner, source_id)
-            return note.content, note.id
+            return note.content, note.id, note.source_language
 
         if payload.source_type == "summary":
             stmt = select(Summary).where(Summary.id == source_id).order_by(desc(Summary.created_at))
@@ -195,16 +201,35 @@ class ElevenLabsService:
             if summary is None:
                 raise HTTPException(status_code=404, detail="Summary not found.")
             note = NoteService.get_note_or_404(db, owner, summary.note_id)
-            return summary.summary_text, note.id
+            return summary.summary_text, note.id, note.source_language
 
         if payload.source_type == "quiz":
             quiz = db.scalar(select(Quiz).where(Quiz.id == source_id))
             if quiz is None:
                 raise HTTPException(status_code=404, detail="Quiz not found.")
             note = NoteService.get_note_or_404(db, owner, quiz.note_id)
-            return ElevenLabsService._format_quiz_for_speech(quiz.questions_json), note.id
+            return ElevenLabsService._format_quiz_for_speech(quiz.questions_json), note.id, note.source_language
 
         raise HTTPException(status_code=400, detail="Unsupported source_type.")
+
+    @staticmethod
+    def _translate_for_speech_if_needed(
+        *,
+        text: str,
+        source_language: str | None,
+        target_language: str,
+    ) -> str:
+        normalized_source = (source_language or "").strip().lower()
+        normalized_target = (target_language or "").strip().lower()
+
+        if not normalized_target or not normalized_source or normalized_source == normalized_target:
+            return text
+
+        return TranslationService._translate_text(
+            text=text,
+            source_language=source_language,
+            target_language=target_language,
+        )
 
     @staticmethod
     def _format_quiz_for_speech(questions_json: list[dict]) -> str:
@@ -235,7 +260,9 @@ class ElevenLabsService:
         elif ElevenLabsService._is_valid_voice_choice(preferred_voice):
             candidate = preferred_voice
         elif source_type == "quiz":
-            candidate = "quiz_male" if gender == "male" else "quiz_female"
+            # Use broadly available warm voices by default for quiz playback.
+            # Custom quiz voices remain selectable explicitly through voice_id.
+            candidate = "warm_male" if gender == "male" else "warm_female"
         elif gender == "male":
             candidate = "default_male"
         else:

@@ -3,13 +3,11 @@ import { aiApi, buildGroupSocketUrl, extractErrorMessage, getApiAccessToken, gro
 
 const getSummaryStorageKey = (userId) => `ai_notes_summaries:${userId}`
 const getQuizStorageKey = (userId) => `ai_notes_quizzes:${userId}`
+const getSummaryFolderStorageKey = (userId) => `ai_notes_summary_folders:${userId}`
+const getQuizFolderStorageKey = (userId) => `ai_notes_quiz_folders:${userId}`
 
-const parseSummaries = (userId) => {
-  if (!userId) {
-    return []
-  }
-
-  const raw = localStorage.getItem(getSummaryStorageKey(userId))
+const parseCollection = (storageKey) => {
+  const raw = localStorage.getItem(storageKey)
   if (!raw) {
     return []
   }
@@ -20,46 +18,87 @@ const parseSummaries = (userId) => {
   } catch {
     return []
   }
+}
+
+const persistCollection = (storageKey, value) => {
+  localStorage.setItem(storageKey, JSON.stringify(value))
+}
+
+const parseFolders = (storageKey) => {
+  return parseCollection(storageKey)
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      itemIds: Array.isArray(folder.itemIds) ? folder.itemIds : [],
+      createdAt: folder.createdAt ?? new Date().toISOString(),
+    }))
+    .filter((folder) => folder.id && folder.name)
+}
+
+const parseSummaries = (userId) => {
+  if (!userId) {
+    return []
+  }
+  return parseCollection(getSummaryStorageKey(userId))
 }
 
 const persistSummaries = (userId, summaries) => {
   if (!userId) {
     return
   }
-  localStorage.setItem(getSummaryStorageKey(userId), JSON.stringify(summaries))
+  persistCollection(getSummaryStorageKey(userId), summaries)
 }
 
 const parseQuizzes = (userId) => {
   if (!userId) {
     return []
   }
-
-  const raw = localStorage.getItem(getQuizStorageKey(userId))
-  if (!raw) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+  return parseCollection(getQuizStorageKey(userId))
 }
 
 const persistQuizzes = (userId, quizzes) => {
   if (!userId) {
     return
   }
-  localStorage.setItem(getQuizStorageKey(userId), JSON.stringify(quizzes))
+  persistCollection(getQuizStorageKey(userId), quizzes)
+}
+
+const parseSummaryFolders = (userId) => {
+  if (!userId) {
+    return []
+  }
+  return parseFolders(getSummaryFolderStorageKey(userId))
+}
+
+const persistSummaryFolders = (userId, folders) => {
+  if (!userId) {
+    return
+  }
+  persistCollection(getSummaryFolderStorageKey(userId), folders)
+}
+
+const parseQuizFolders = (userId) => {
+  if (!userId) {
+    return []
+  }
+  return parseFolders(getQuizFolderStorageKey(userId))
+}
+
+const persistQuizFolders = (userId, folders) => {
+  if (!userId) {
+    return
+  }
+  persistCollection(getQuizFolderStorageKey(userId), folders)
 }
 
 export const useStudyStore = create((set, get) => ({
   summary: null,
   summaries: [],
+  summaryFolders: [],
   translation: null,
   quiz: null,
   quizzes: [],
+  quizFolders: [],
   audio: null,
   voices: [],
   moods: [],
@@ -89,10 +128,22 @@ export const useStudyStore = create((set, get) => ({
     return summaries
   },
 
+  hydrateSummaryFolders: (userId) => {
+    const folders = parseSummaryFolders(userId)
+    set({ summaryFolders: folders })
+    return folders
+  },
+
   hydrateQuizzes: (userId) => {
     const quizzes = parseQuizzes(userId)
     set({ quizzes })
     return quizzes
+  },
+
+  hydrateQuizFolders: (userId) => {
+    const folders = parseQuizFolders(userId)
+    set({ quizFolders: folders })
+    return folders
   },
 
   summarizeNote: async (noteId, payload) => {
@@ -120,6 +171,7 @@ export const useStudyStore = create((set, get) => ({
         model_used: summary.model_used,
         created_at: summary.created_at,
         source_language: note.source_language,
+        translated_language: null,
         folder_name: folderName,
       }
 
@@ -176,6 +228,7 @@ export const useStudyStore = create((set, get) => ({
         difficulty: quiz.difficulty,
         created_at: quiz.created_at,
         source_language: note.source_language,
+        translated_language: null,
         folder_name: folderName,
       }
 
@@ -189,6 +242,262 @@ export const useStudyStore = create((set, get) => ({
       return entry
     } catch (error) {
       const message = extractErrorMessage(error, 'Unable to generate quiz.')
+      set({ loading: false, error: message })
+      throw new Error(message)
+    }
+  },
+
+  createSummaryFolder: (userId, name) => {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      throw new Error('Folder name is required.')
+    }
+
+    const existing = parseSummaryFolders(userId)
+    if (existing.some((folder) => folder.name.toLowerCase() === trimmedName.toLowerCase())) {
+      throw new Error('A folder with that name already exists.')
+    }
+
+    const nextFolders = [
+      {
+        id: crypto.randomUUID(),
+        name: trimmedName,
+        itemIds: [],
+        createdAt: new Date().toISOString(),
+      },
+      ...existing,
+    ]
+
+    persistSummaryFolders(userId, nextFolders)
+    set({ summaryFolders: nextFolders })
+    return nextFolders[0]
+  },
+
+  createQuizFolder: (userId, name) => {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      throw new Error('Folder name is required.')
+    }
+
+    const existing = parseQuizFolders(userId)
+    if (existing.some((folder) => folder.name.toLowerCase() === trimmedName.toLowerCase())) {
+      throw new Error('A folder with that name already exists.')
+    }
+
+    const nextFolders = [
+      {
+        id: crypto.randomUUID(),
+        name: trimmedName,
+        itemIds: [],
+        createdAt: new Date().toISOString(),
+      },
+      ...existing,
+    ]
+
+    persistQuizFolders(userId, nextFolders)
+    set({ quizFolders: nextFolders })
+    return nextFolders[0]
+  },
+
+  moveSummariesToFolder: (userId, summaryIds, folderId) => {
+    const existing = parseSummaryFolders(userId)
+    const idSet = new Set(summaryIds)
+    const clearedFolders = existing.map((folder) => ({
+      ...folder,
+      itemIds: folder.itemIds.filter((itemId) => !idSet.has(itemId)),
+    }))
+
+    const nextFolders = folderId
+      ? clearedFolders.map((folder) =>
+          folder.id === folderId
+            ? { ...folder, itemIds: Array.from(new Set([...folder.itemIds, ...summaryIds])) }
+            : folder
+        )
+      : clearedFolders
+
+    persistSummaryFolders(userId, nextFolders)
+    set({ summaryFolders: nextFolders })
+    return nextFolders
+  },
+
+  moveQuizzesToFolder: (userId, quizIds, folderId) => {
+    const existing = parseQuizFolders(userId)
+    const idSet = new Set(quizIds)
+    const clearedFolders = existing.map((folder) => ({
+      ...folder,
+      itemIds: folder.itemIds.filter((itemId) => !idSet.has(itemId)),
+    }))
+
+    const nextFolders = folderId
+      ? clearedFolders.map((folder) =>
+          folder.id === folderId
+            ? { ...folder, itemIds: Array.from(new Set([...folder.itemIds, ...quizIds])) }
+            : folder
+        )
+      : clearedFolders
+
+    persistQuizFolders(userId, nextFolders)
+    set({ quizFolders: nextFolders })
+    return nextFolders
+  },
+
+  deleteSummaryDocument: (userId, summaryId) => {
+    const nextSummaries = parseSummaries(userId).filter((item) => item.id !== summaryId)
+    const nextFolders = parseSummaryFolders(userId).map((folder) => ({
+      ...folder,
+      itemIds: folder.itemIds.filter((itemId) => itemId !== summaryId),
+    }))
+    persistSummaries(userId, nextSummaries)
+    persistSummaryFolders(userId, nextFolders)
+    set({ summaries: nextSummaries, summaryFolders: nextFolders })
+  },
+
+  deleteQuizDocument: (userId, quizId) => {
+    const nextQuizzes = parseQuizzes(userId).filter((item) => item.id !== quizId)
+    const nextFolders = parseQuizFolders(userId).map((folder) => ({
+      ...folder,
+      itemIds: folder.itemIds.filter((itemId) => itemId !== quizId),
+    }))
+    persistQuizzes(userId, nextQuizzes)
+    persistQuizFolders(userId, nextFolders)
+    set({ quizzes: nextQuizzes, quizFolders: nextFolders })
+  },
+
+  deleteSummaryFolder: (userId, folderId, strategy = 'move') => {
+    const existing = parseSummaryFolders(userId)
+    const folder = existing.find((item) => item.id === folderId)
+
+    if (!folder) {
+      throw new Error('Folder not found.')
+    }
+
+    if (strategy === 'delete') {
+      folder.itemIds.forEach((summaryId) => get().deleteSummaryDocument(userId, summaryId))
+    }
+
+    const nextFolders = parseSummaryFolders(userId).filter((item) => item.id !== folderId)
+    persistSummaryFolders(userId, nextFolders)
+    set({ summaryFolders: nextFolders })
+  },
+
+  deleteQuizFolder: (userId, folderId, strategy = 'move') => {
+    const existing = parseQuizFolders(userId)
+    const folder = existing.find((item) => item.id === folderId)
+
+    if (!folder) {
+      throw new Error('Folder not found.')
+    }
+
+    if (strategy === 'delete') {
+      folder.itemIds.forEach((quizId) => get().deleteQuizDocument(userId, quizId))
+    }
+
+    const nextFolders = parseQuizFolders(userId).filter((item) => item.id !== folderId)
+    persistQuizFolders(userId, nextFolders)
+    set({ quizFolders: nextFolders })
+  },
+
+  translateSummaryDocument: async ({ userId, summary, targetLanguage, folderName = null }) => {
+    set({ loading: true, error: null })
+    try {
+      const translation = await aiApi.translateText({
+        text: summary.summary_text,
+        source_language: summary.translated_language || summary.source_language,
+        target_language: targetLanguage,
+        translation_type: 'text',
+      })
+
+      const entry = {
+        ...summary,
+        id: crypto.randomUUID(),
+        note_title: `${targetLanguage}-${summary.note_title}`,
+        summary_text: translation.translated_text,
+        created_at: new Date().toISOString(),
+        translated_language: targetLanguage,
+        folder_name: folderName,
+      }
+
+      const next = [entry, ...parseSummaries(userId)].sort(
+        (left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime()
+      )
+      persistSummaries(userId, next)
+      set({ summaries: next, loading: false })
+      return entry
+    } catch (error) {
+      const message = extractErrorMessage(error, 'Unable to translate summary.')
+      set({ loading: false, error: message })
+      throw new Error(message)
+    }
+  },
+
+  translateQuizDocument: async ({ userId, quiz, targetLanguage, folderName = null }) => {
+    set({ loading: true, error: null })
+    try {
+      const translatedQuestions = await Promise.all(
+        quiz.questions_json.map(async (question) => {
+          const [translatedQuestion, translatedAnswer, translatedExplanation, translatedOptions] = await Promise.all([
+            aiApi.translateText({
+              text: question.question,
+              source_language: quiz.translated_language || quiz.source_language,
+              target_language: targetLanguage,
+              translation_type: 'text',
+            }),
+            question.answer
+              ? aiApi.translateText({
+                  text: question.answer,
+                  source_language: quiz.translated_language || quiz.source_language,
+                  target_language: targetLanguage,
+                  translation_type: 'text',
+                })
+              : Promise.resolve({ translated_text: '' }),
+            question.explanation
+              ? aiApi.translateText({
+                  text: question.explanation,
+                  source_language: quiz.translated_language || quiz.source_language,
+                  target_language: targetLanguage,
+                  translation_type: 'text',
+                })
+              : Promise.resolve({ translated_text: '' }),
+            Promise.all(
+              question.options.map((option) =>
+                aiApi.translateText({
+                  text: option,
+                  source_language: quiz.translated_language || quiz.source_language,
+                  target_language: targetLanguage,
+                  translation_type: 'text',
+                })
+              )
+            ),
+          ])
+
+          return {
+            ...question,
+            question: translatedQuestion.translated_text,
+            answer: translatedAnswer.translated_text || question.answer,
+            explanation: translatedExplanation.translated_text || question.explanation,
+            options: translatedOptions.map((option) => option.translated_text),
+          }
+        })
+      )
+
+      const entry = {
+        ...quiz,
+        id: crypto.randomUUID(),
+        note_title: `${targetLanguage}-${quiz.note_title}`,
+        questions_json: translatedQuestions,
+        created_at: new Date().toISOString(),
+        translated_language: targetLanguage,
+        folder_name: folderName,
+      }
+
+      const next = [entry, ...parseQuizzes(userId)].sort(
+        (left, right) => new Date(right.created_at ?? 0).getTime() - new Date(left.created_at ?? 0).getTime()
+      )
+      persistQuizzes(userId, next)
+      set({ quizzes: next, loading: false })
+      return entry
+    } catch (error) {
+      const message = extractErrorMessage(error, 'Unable to translate quiz.')
       set({ loading: false, error: message })
       throw new Error(message)
     }

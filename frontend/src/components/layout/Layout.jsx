@@ -3,18 +3,20 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BookOpen, Brain, FileText, LogOut, Settings, Sparkles, Users } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import { useUserStore } from '../../store/userStore'
+import { createTranslator, formatLocalizedDate } from '../../utils/appText'
 
 const Layout = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { profile, initialized, hydrateSession, logout } = useUserStore()
+  const t = createTranslator(profile?.preferred_language)
   const navLinks = [
-    { to: '/', label: 'Dashboard', icon: Brain },
-    { to: '/notes', label: 'My Notes', icon: FileText },
-    { to: '/summary', label: 'Summary', icon: Sparkles },
-    { to: '/quiz', label: 'Quiz', icon: BookOpen },
-    { to: '/groups', label: 'Groups', icon: Users },
-    { to: '/settings', label: 'Settings', icon: Settings },
+    { to: '/', label: t('dashboard'), icon: Brain },
+    { to: '/notes', label: t('my_notes'), icon: FileText },
+    { to: '/summary', label: t('summary'), icon: Sparkles },
+    { to: '/quiz', label: t('quiz'), icon: BookOpen },
+    { to: '/groups', label: t('groups'), icon: Users },
+    { to: '/settings', label: t('settings'), icon: Settings },
   ]
 
   useEffect(() => {
@@ -28,7 +30,7 @@ const Layout = () => {
   }, [initialized, navigate, profile])
 
   if (!initialized) {
-    return <div className="app-shell min-h-screen flex items-center justify-center text-muted">Loading your workspace...</div>
+    return <div className="app-shell min-h-screen flex items-center justify-center text-muted">{t('loading_workspace')}</div>
   }
 
   return (
@@ -41,8 +43,8 @@ const Layout = () => {
             <Brain size={18} className="text-white" />
           </div>
           <div>
-            <span className="font-bold text-lg text-main block leading-tight">AI Notes</span>
-            <span className="text-xs text-muted">Study smarter, together</span>
+            <span className="font-bold text-lg text-main block leading-tight">{t('app_name')}</span>
+            <span className="text-xs text-muted">{t('tagline')}</span>
           </div>
         </div>
 
@@ -51,8 +53,8 @@ const Layout = () => {
             const isActive =
               location.pathname === to ||
               location.pathname.startsWith(`${to}/`) ||
-              (label === 'Summary' && (location.pathname === '/summary' || location.pathname.includes('/study'))) ||
-              (label === 'Quiz' && location.pathname.includes('/quiz'))
+              (label === t('summary') && (location.pathname === '/summary' || location.pathname.includes('/study'))) ||
+              (label === t('quiz') && location.pathname.includes('/quiz'))
             return (
               <Link
                 key={to}
@@ -71,13 +73,13 @@ const Layout = () => {
         </nav>
 
         <div className="rounded-3xl p-4 text-white shadow-lg shadow-violet-200" style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #ec4899 100%)' }}>
-          <p className="text-xs uppercase tracking-[0.2em] text-violet-100">Focus mode</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-violet-100">{t('focus_mode')}</p>
           <p className="mt-2 text-sm font-medium leading-6">
-            Summaries, quizzes, speech and live collaboration are all connected to your backend now.
+            {t('focus_mode_copy')}
           </p>
           <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs">
             <BookOpen size={14} />
-            Ready to study
+            {t('ready_to_study')}
           </div>
         </div>
 
@@ -87,7 +89,7 @@ const Layout = () => {
               {profile?.full_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? 'A'}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-main truncate">{profile?.full_name || 'Student'}</p>
+              <p className="text-sm font-semibold text-main truncate">{profile?.full_name || t('student')}</p>
               <p className="text-xs text-muted truncate">{profile?.email}</p>
             </div>
           </div>
@@ -100,7 +102,7 @@ const Layout = () => {
             style={{ borderColor: 'var(--border-soft)', background: 'var(--surface)' }}
           >
             <LogOut size={16} />
-            Sign out
+            {t('sign_out')}
           </button>
         </div>
       </aside>
@@ -108,9 +110,9 @@ const Layout = () => {
       <div className="ml-64 flex-1 flex flex-col min-h-screen">
         <header className="flex h-18 items-center justify-between px-8 sticky top-0 z-10 backdrop-blur border-b" style={{ background: 'var(--surface)', borderColor: 'var(--border-soft)' }}>
           <div>
-            <p className="text-sm text-muted">Workspace</p>
+            <p className="text-sm text-muted">{t('workspace')}</p>
             <p className="text-base font-semibold text-main">
-              {new Date().toLocaleDateString('en-US', {
+              {formatLocalizedDate(new Date(), profile?.preferred_language, {
                 weekday: 'long',
                 month: 'long',
                 day: 'numeric',
@@ -119,7 +121,7 @@ const Layout = () => {
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold text-soft">{profile?.preferred_language?.toUpperCase() || 'EN'}</p>
-            <p className="text-xs text-muted">Default study language</p>
+            <p className="text-xs text-muted">{t('default_study_language')}</p>
           </div>
         </header>
 

@@ -4,25 +4,31 @@ import { MoreHorizontal, Plus } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
-import { useAudio } from '../hooks/useAudio'
 import { useNoteStore } from '../store/noteStore'
 import { useStudyStore } from '../store/studyStore'
+import { useUserStore } from '../store/userStore'
 import { languageOptions } from '../utils/languageMap'
 
 const QuizPage = () => {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { selectedNote, fetchNote } = useNoteStore()
-  const { quiz, audio, generateQuiz, generateSpeech, loading } = useStudyStore()
+  const { profile } = useUserStore()
+  const { selectedNote, fetchNote, folders, hydrateFolders } = useNoteStore()
+  const { quiz, generateAndStoreQuiz, loading } = useStudyStore()
   const [difficulty, setDifficulty] = useState('medium')
   const [numQuestions, setNumQuestions] = useState(5)
   const [speechLanguage, setSpeechLanguage] = useState('en')
   const [actionsOpen, setActionsOpen] = useState(false)
-  const { play, pause, playing } = useAudio(audio?.public_url)
 
   useEffect(() => {
     fetchNote(id).catch((error) => toast.error(error.message))
   }, [fetchNote, id])
+
+  useEffect(() => {
+    if (profile?.id) {
+      hydrateFolders(profile.id)
+    }
+  }, [hydrateFolders, profile?.id])
 
   useEffect(() => {
     if (selectedNote?.source_language) {
@@ -32,26 +38,25 @@ const QuizPage = () => {
 
   const handleGenerateQuiz = async () => {
     try {
-      await generateQuiz(id, {
-        difficulty,
-        num_questions: numQuestions,
+      if (!selectedNote || !profile?.id) {
+        toast.error('Note context is missing.')
+        return
+      }
+
+      const folderName =
+        folders.find((folder) => folder.noteIds.includes(selectedNote.id))?.name ?? null
+
+      const entry = await generateAndStoreQuiz({
+        userId: profile.id,
+        note: selectedNote,
+        folderName,
+        payload: {
+          difficulty,
+          num_questions: numQuestions,
+        },
       })
       toast.success('Quiz generated.')
-    } catch (error) {
-      toast.error(error.message)
-    }
-  }
-
-  const handleSpeakQuiz = async () => {
-    try {
-      await generateSpeech({
-        quizId: quiz.id,
-        gender: 'female',
-        mood: 'interactive',
-        language: speechLanguage,
-      })
-      toast.success('Quiz audio ready.')
-      setActionsOpen(false)
+      navigate(`/quiz/${entry.id}`)
     } catch (error) {
       toast.error(error.message)
     }
@@ -87,10 +92,13 @@ const QuizPage = () => {
                 {quiz ? (
                   <button
                     type="button"
-                    onClick={handleSpeakQuiz}
+                    onClick={() => {
+                      setActionsOpen(false)
+                      navigate(`/quiz/${quiz.id}`)
+                    }}
                     className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                   >
-                    Speak quiz
+                    Open latest quiz
                   </button>
                 ) : null}
                 <button

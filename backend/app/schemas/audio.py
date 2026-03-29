@@ -13,6 +13,7 @@ class SpeechGenerateRequest(BaseModel):
     source_type: SpeechSourceType = "text"
     source_id: UUID | None = None
     text: str | None = None
+    source_language: str | None = None
     voice_id: str | None = None
     gender: VoiceGender | None = None
     mood: str | None = None

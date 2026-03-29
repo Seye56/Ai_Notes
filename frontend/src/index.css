@@ -192,4 +192,69 @@
   .overlay-backdrop {
     background: var(--overlay);
   }
+
+  .group-editor-shell {
+    position: relative;
+  }
+
+  .group-editor-textarea {
+    position: relative;
+    z-index: 2;
+    background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
+    line-height: 24px;
+    caret-color: var(--accent);
+  }
+
+  .group-presence-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid;
+    border-radius: 999px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .group-presence-pill-dot {
+    height: 0.55rem;
+    width: 0.55rem;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .group-cursor-marker {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .group-cursor-marker-line {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 2px;
+    height: 24px;
+    border-radius: 999px;
+  }
+
+  .group-cursor-marker-label {
+    position: absolute;
+    left: -2px;
+    top: -1.45rem;
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: var(--shadow-card);
+  }
+
+  .group-selection-highlight {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+    border: 1px solid;
+    border-radius: 0.35rem;
+  }
 }

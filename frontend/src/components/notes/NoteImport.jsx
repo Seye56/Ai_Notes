@@ -1,6 +1,8 @@
 import { acceptedImportTypes, getFileDisplayName } from '../../utils/fileParser'
 import { languageOptions } from '../../utils/languageMap'
 import Button from '../ui/Button'
+import { useUserStore } from '../../store/userStore'
+import { createTranslator } from '../../utils/appText'
 
 const NoteImport = ({
   importTitle,
@@ -14,11 +16,13 @@ const NoteImport = ({
   onSubmit,
   busy = false,
 }) => {
+  const { profile } = useUserStore()
+  const t = createTranslator(profile?.preferred_language)
   return (
     <div className="panel rounded-[28px] border-dashed p-6 space-y-4">
       <div>
-        <h3 className="text-lg font-bold text-main">Import note</h3>
-        <p className="text-sm text-muted">Paste text or upload a `.txt`, `.pdf`, or `.docx` file.</p>
+        <h3 className="text-lg font-bold text-main">{t('import_note')}</h3>
+        <p className="text-sm text-muted">{t('import_note_copy')}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[1.4fr,160px]">
@@ -26,7 +30,7 @@ const NoteImport = ({
           type="text"
           value={importTitle}
           onChange={(event) => onTitleChange(event.target.value)}
-          placeholder="Optional title"
+          placeholder={t('optional_title')}
           className="input-field"
         />
         <select
@@ -46,7 +50,7 @@ const NoteImport = ({
         value={pastedText}
         onChange={(event) => onTextChange(event.target.value)}
         className="textarea-field min-h-[180px] w-full rounded-[24px]"
-        placeholder="Paste typed notes here..."
+        placeholder={t('paste_typed_notes_here')}
       />
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -60,7 +64,7 @@ const NoteImport = ({
           {getFileDisplayName(file)}
         </label>
         <Button onClick={onSubmit} disabled={busy}>
-          {busy ? 'Importing...' : 'Import into notes'}
+          {busy ? t('importing') : t('import_into_notes')}
         </Button>
       </div>
     </div>

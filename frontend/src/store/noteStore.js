@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { extractErrorMessage, notesApi } from '../services/api'
+import { aiApi, extractErrorMessage, notesApi } from '../services/api'
 
 const getFolderStorageKey = (userId) => `ai_notes_folders:${userId}`
 
@@ -150,6 +150,31 @@ export const useNoteStore = create((set, get) => ({
       return note
     } catch (error) {
       const message = extractErrorMessage(error, 'Unable to import note.')
+      set({ saving: false, error: message })
+      throw new Error(message)
+    }
+  },
+
+  createTranslatedNote: async ({ noteId, title, targetLanguage, targetLanguageCode }) => {
+    set({ saving: true, error: null })
+    try {
+      const translation = await aiApi.translate(noteId, {
+        target_language: targetLanguage,
+        translation_type: 'text',
+      })
+      const note = await notesApi.create({
+        title,
+        content: translation.translated_content,
+        source_language: targetLanguageCode,
+      })
+      set((state) => ({
+        notes: [note, ...state.notes],
+        selectedNote: note,
+        saving: false,
+      }))
+      return note
+    } catch (error) {
+      const message = extractErrorMessage(error, 'Unable to create translated note.')
       set({ saving: false, error: message })
       throw new Error(message)
     }

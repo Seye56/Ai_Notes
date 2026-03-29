@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasPath, BaseModel, ConfigDict, Field, model_validator
 
 
 class GroupCreate(BaseModel):
@@ -20,8 +20,15 @@ class GroupRead(BaseModel):
 
 
 class GroupMemberAdd(BaseModel):
-    user_id: UUID
+    user_id: UUID | None = None
+    email: str | None = None
     role: str = "member"
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "GroupMemberAdd":
+        if self.user_id is None and not self.email:
+            raise ValueError("Either user_id or email must be provided.")
+        return self
 
 
 class GroupMemberRead(BaseModel):
@@ -32,6 +39,8 @@ class GroupMemberRead(BaseModel):
     user_id: UUID
     role: str
     joined_at: datetime
+    email: str | None = Field(default=None, validation_alias=AliasPath("user", "email"))
+    full_name: str | None = Field(default=None, validation_alias=AliasPath("user", "full_name"))
 
 
 class GroupEventCreate(BaseModel):

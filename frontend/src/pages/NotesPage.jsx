@@ -10,10 +10,12 @@ import NoteImport from '../components/notes/NoteImport'
 import NoteList from '../components/notes/NoteList'
 import { useNoteStore } from '../store/noteStore'
 import { useUserStore } from '../store/userStore'
+import { createTranslator } from '../utils/appText'
 
 const NotesPage = () => {
   const navigate = useNavigate()
   const { profile } = useUserStore()
+  const t = createTranslator(profile?.preferred_language)
   const {
     notes,
     folders,
@@ -198,11 +200,11 @@ const NotesPage = () => {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-main">My Notes</h1>
+          <h1 className="text-3xl font-bold text-main">{t('my_notes')}</h1>
           <p className="text-sm text-muted">
             {selectedFolder
               ? `Viewing ${selectedFolder.name}. Move notes in and out whenever you need.`
-              : 'Manage imported files, typed notes, and study material in one place.'}
+              : t('manage_notes_copy')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -222,7 +224,7 @@ const NotesPage = () => {
                     }
                   }}
                 >
-                  <option value="" disabled>Move to folder</option>
+                  <option value="" disabled>{t('move_to_folder')}</option>
                   {folders.map((folder) => (
                     <option key={folder.id} value={folder.id}>
                       {folder.name}
@@ -231,15 +233,15 @@ const NotesPage = () => {
                 </select>
               ) : null}
               <Button variant="secondary" onClick={() => handleMoveSelectedToFolder(null)} disabled={!selectedNotes.length}>
-                Move to notes
+                {t('move_to_notes')}
               </Button>
               <Button variant="danger" onClick={handleDeleteSelected} disabled={!selectedNotes.length || saving}>
                 <Trash2 size={16} />
-                Delete selected
+                {t('delete_selected')}
               </Button>
               <Button variant="secondary" onClick={handleExitSelectionMode}>
                 <X size={16} />
-                Done
+                {t('done')}
               </Button>
             </>
           ) : (
@@ -267,21 +269,21 @@ const NotesPage = () => {
                       onClick={handleOpenImport}
                       className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                     >
-                      Import note
+                      {t('import_note')}
                     </button>
                     <button
                       type="button"
                       onClick={handleOpenSelectionMode}
                       className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                     >
-                      Select notes
+                      {t('select_notes')}
                     </button>
                     <button
                       type="button"
                       onClick={handleOpenFolders}
                       className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                     >
-                      Folders
+                      {t('folders')}
                     </button>
                   </div>
                 ) : null}
@@ -297,7 +299,7 @@ const NotesPage = () => {
           onClick={() => setSelectedFolderId(null)}
           className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === null ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
         >
-          My Notes
+          {t('my_notes')}
         </button>
         {folders.map((folder) => (
           <button
@@ -326,7 +328,7 @@ const NotesPage = () => {
         />
       )}
 
-      <Modal open={importOpen} title="Import a note" onClose={() => setImportOpen(false)}>
+      <Modal open={importOpen} title={t('import_note')} onClose={() => setImportOpen(false)}>
         <NoteImport
           importTitle={importTitle}
           pastedText={pastedText}
@@ -348,18 +350,18 @@ const NotesPage = () => {
         busy={saving}
       />
 
-      <Modal open={foldersOpen} title="Manage folders" onClose={() => setFoldersOpen(false)}>
+      <Modal open={foldersOpen} title={t('folder_manage')} onClose={() => setFoldersOpen(false)}>
         <div className="space-y-5">
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               className="input-field"
-              placeholder="New folder name"
+              placeholder={t('new_folder_name')}
               value={folderName}
               onChange={(event) => setFolderName(event.target.value)}
             />
             <Button onClick={handleCreateFolder}>
               <FolderOpen size={16} />
-              Create folder
+              {t('create_folder')}
             </Button>
           </div>
 
@@ -380,15 +382,15 @@ const NotesPage = () => {
                           setFoldersOpen(false)
                         }}
                       >
-                        Open
+                        {t('open')}
                       </Button>
                       {selectionMode && selectedNotes.length ? (
                         <Button variant="ghost" onClick={() => handleMoveSelectedToFolder(folder.id)}>
-                          Move selected here
+                          {t('move_selected_here')}
                         </Button>
                       ) : null}
                       <Button variant="danger" onClick={() => handleDeleteFolder(folder)}>
-                        Delete folder
+                        {t('delete_folder')}
                       </Button>
                     </div>
                   </div>
@@ -396,7 +398,7 @@ const NotesPage = () => {
               ))
             ) : (
               <div className="panel-soft rounded-2xl p-4 text-sm text-muted">
-                No folders yet. Create one to organize notes separately from your main notes list.
+                {t('no_folders_yet')}
               </div>
             )}
           </div>

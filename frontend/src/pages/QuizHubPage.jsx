@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { MoreHorizontal, Plus } from 'lucide-react'
+import { FolderOpen, MoreHorizontal, Plus, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
 import Modal from '../components/ui/Modal'
-import { useAudio } from '../hooks/useAudio'
 import { useNoteStore } from '../store/noteStore'
 import { useStudyStore } from '../store/studyStore'
 import { useUserStore } from '../store/userStore'
@@ -15,15 +14,28 @@ const QuizHubPage = () => {
   const navigate = useNavigate()
   const { profile } = useUserStore()
   const { notes, folders, loading: notesLoading, fetchNotes, hydrateFolders } = useNoteStore()
-  const { quizzes, loading, audio, hydrateQuizzes, generateAndStoreQuiz, generateSpeech } = useStudyStore()
+  const {
+    quizzes,
+    quizFolders,
+    loading,
+    hydrateQuizzes,
+    hydrateQuizFolders,
+    generateAndStoreQuiz,
+    createQuizFolder,
+    moveQuizzesToFolder,
+    deleteQuizFolder,
+  } = useStudyStore()
   const [createOpen, setCreateOpen] = useState(false)
+  const [foldersOpen, setFoldersOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [selectedFolderId, setSelectedFolderId] = useState(null)
-  const [activeQuizId, setActiveQuizId] = useState(null)
+  const [pickerFolderId, setPickerFolderId] = useState(null)
   const [difficulty, setDifficulty] = useState('medium')
   const [numQuestions, setNumQuestions] = useState(5)
   const [speechLanguage, setSpeechLanguage] = useState(profile?.preferred_language || 'en')
-  const { play, pause, playing } = useAudio(audio?.public_url)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedQuizzes, setSelectedQuizzes] = useState([])
+  const [folderName, setFolderName] = useState('')
 
   useEffect(() => {
     fetchNotes().catch((error) => toast.error(error.message))
@@ -32,13 +44,11 @@ const QuizHubPage = () => {
   useEffect(() => {
     if (profile?.id) {
       hydrateFolders(profile.id)
-      const loaded = hydrateQuizzes(profile.id)
-      if (loaded[0]?.id) {
-        setActiveQuizId(loaded[0].id)
-      }
+      hydrateQuizzes(profile.id)
+      hydrateQuizFolders(profile.id)
       setSpeechLanguage(profile.preferred_language || 'en')
     }
-  }, [hydrateFolders, hydrateQuizzes, profile?.id, profile?.preferred_language])
+  }, [hydrateFolders, hydrateQuizzes, hydrateQuizFolders, profile?.id, profile?.preferred_language])
 
   const folderNameByNoteId = useMemo(() => {
     const map = new Map()
@@ -51,19 +61,36 @@ const QuizHubPage = () => {
   }, [folders])
 
   const pickerNotes = useMemo(() => {
-    if (selectedFolderId === 'my-notes') {
+    if (pickerFolderId === 'my-notes') {
       return notes.filter((note) => !folders.some((folder) => folder.noteIds.includes(note.id)))
     }
 
-    if (selectedFolderId) {
-      const folder = folders.find((item) => item.id === selectedFolderId)
+    if (pickerFolderId) {
+      const folder = folders.find((item) => item.id === pickerFolderId)
       return notes.filter((note) => folder?.noteIds.includes(note.id))
     }
 
     return notes
-  }, [folders, notes, selectedFolderId])
+  }, [folders, notes, pickerFolderId])
 
-  const activeQuiz = quizzes.find((quiz) => quiz.id === activeQuizId) ?? quizzes[0] ?? null
+  const folderNameByQuizId = useMemo(() => {
+    const map = new Map()
+    quizFolders.forEach((folder) => {
+      folder.itemIds.forEach((quizId) => {
+        map.set(quizId, folder.name)
+      })
+    })
+    return map
+  }, [quizFolders])
+
+  const quizzesInSelectedFolder = useMemo(() => {
+    if (selectedFolderId) {
+      const folder = quizFolders.find((item) => item.id === selectedFolderId)
+      return quizzes.filter((quiz) => folder?.itemIds.includes(quiz.id))
+    }
+
+    return quizzes.filter((quiz) => !quizFolders.some((folder) => folder.itemIds.includes(quiz.id)))
+  }, [quizzes, quizFolders, selectedFolderId])
 
   const handleGenerateQuizForNote = async (note) => {
     try {
@@ -76,29 +103,87 @@ const QuizHubPage = () => {
           num_questions: numQuestions,
         },
       })
-      setActiveQuizId(entry.id)
       setCreateOpen(false)
       toast.success(`${note.title} quiz generated.`)
+      navigate(`/quiz/${entry.id}`)
     } catch (error) {
       toast.error(error.message)
     }
   }
 
-  const handleSpeakActiveQuiz = async () => {
-    if (!activeQuiz) {
-      toast.error('Choose a quiz first.')
+  const toggleSelection = (quizId) => {
+    setSelectedQuizzes((current) =>
+      current.includes(quizId) ? current.filter((id) => id !== quizId) : [...current, quizId]
+    )
+  }
+
+  const handleOpenSelectionMode = () => {
+    setActionsOpen(false)
+    setSelectionMode(true)
+  }
+
+  const handleOpenFolders = () => {
+    setActionsOpen(false)
+    setFoldersOpen(true)
+  }
+
+  const handleExitSelectionMode = () => {
+    setSelectionMode(false)
+    setSelectedQuizzes([])
+  }
+
+  const handleCreateFolder = () => {
+    try {
+      const folder = createQuizFolder(profile?.id, folderName)
+      setFolderName('')
+      toast.success(`${folder.name} created.`)
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const handleMoveSelectedToFolder = (folderId) => {
+    try {
+      moveQuizzesToFolder(profile?.id, selectedQuizzes, folderId)
+      toast.success(folderId ? 'Quizzes moved to folder.' : 'Quizzes moved back to Quiz.')
+      handleExitSelectionMode()
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
+  const handleDeleteFolder = (folder) => {
+    const moveToQuiz = window.confirm(
+      `Delete "${folder.name}"?\n\nPress OK to move its quizzes back to Quiz.\nPress Cancel if you want to choose the delete-everything option next.`
+    )
+
+    if (moveToQuiz) {
+      try {
+        deleteQuizFolder(profile?.id, folder.id, 'move')
+        if (selectedFolderId === folder.id) {
+          setSelectedFolderId(null)
+        }
+        toast.success('Folder deleted. Quizzes moved back to Quiz.')
+      } catch (error) {
+        toast.error(error.message)
+      }
+      return
+    }
+
+    const deleteEverything = window.confirm(
+      `Delete "${folder.name}" and every quiz inside it? This cannot be undone.`
+    )
+
+    if (!deleteEverything) {
       return
     }
 
     try {
-      await generateSpeech({
-        quizId: activeQuiz.id,
-        gender: 'female',
-        mood: 'interactive',
-        language: speechLanguage,
-      })
-      toast.success('Quiz audio ready.')
-      setActionsOpen(false)
+      deleteQuizFolder(profile?.id, folder.id, 'delete')
+      if (selectedFolderId === folder.id) {
+        setSelectedFolderId(null)
+      }
+      toast.success('Folder and its quizzes deleted.')
     } catch (error) {
       toast.error(error.message)
     }
@@ -109,58 +194,111 @@ const QuizHubPage = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-main">Quiz</h1>
-          <p className="text-sm text-muted">Generate and revisit quizzes from your notes in one focused workspace.</p>
+          <p className="text-sm text-muted">
+            {selectedFolderId
+              ? `Viewing ${quizFolders.find((folder) => folder.id === selectedFolderId)?.name}. Move quizzes in and out whenever you need.`
+              : 'Generate and revisit quizzes from your notes in one focused workspace.'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button className="h-12 w-12 rounded-full px-0" onClick={() => setCreateOpen(true)} aria-label="Generate a quiz">
-            <Plus size={20} />
-          </Button>
-          <div className="relative">
-            <Button
-              variant="secondary"
-              className="h-12 w-12 rounded-full px-0"
-              onClick={() => setActionsOpen((open) => !open)}
-              aria-label="Quiz actions"
-            >
-              <MoreHorizontal size={18} />
-            </Button>
-            {actionsOpen ? (
-              <div className="panel absolute right-0 top-14 z-20 flex min-w-[13rem] flex-col rounded-2xl p-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionsOpen(false)
-                    setActiveQuizId(null)
+          {selectionMode ? (
+            <>
+              <div className="glass-chip rounded-full px-4 py-2 text-sm font-medium text-main">
+                {selectedQuizzes.length} selected
+              </div>
+              {quizFolders.length ? (
+                <select
+                  className="select-field w-auto min-w-[12rem]"
+                  defaultValue=""
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      handleMoveSelectedToFolder(event.target.value)
+                      event.target.value = ''
+                    }
                   }}
-                  className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                 >
-                  Show all quizzes
-                </button>
-                {activeQuiz ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleSpeakActiveQuiz}
-                      className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
-                    >
-                      Speak quiz
-                    </button>
+                  <option value="" disabled>Move to folder</option>
+                  {quizFolders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <Button variant="secondary" onClick={() => handleMoveSelectedToFolder(null)} disabled={!selectedQuizzes.length}>
+                Move to Quiz
+              </Button>
+              <Button variant="secondary" onClick={handleExitSelectionMode}>
+                <X size={16} />
+                Done
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button className="h-12 w-12 rounded-full px-0" onClick={() => setCreateOpen(true)} aria-label="Generate a quiz">
+                <Plus size={20} />
+              </Button>
+              <div className="relative">
+                <Button
+                  variant="secondary"
+                  className="h-12 w-12 rounded-full px-0"
+                  onClick={() => setActionsOpen((open) => !open)}
+                  aria-label="Quiz actions"
+                >
+                  <MoreHorizontal size={18} />
+                </Button>
+                {actionsOpen ? (
+                  <div className="panel absolute right-0 top-14 z-20 flex min-w-[13rem] flex-col rounded-2xl p-2">
                     <button
                       type="button"
                       onClick={() => {
                         setActionsOpen(false)
-                        navigate(`/note/${activeQuiz.note_id}`)
+                        setSelectedFolderId(null)
                       }}
                       className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                     >
-                      Open source note
+                      Show all quizzes
                     </button>
-                  </>
+                    <button
+                      type="button"
+                      onClick={handleOpenSelectionMode}
+                      className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
+                    >
+                      Select quizzes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenFolders}
+                      className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
+                    >
+                      Folders
+                    </button>
+                  </div>
                 ) : null}
               </div>
-            ) : null}
-          </div>
+            </>
+          )}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSelectedFolderId(null)}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === null ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+        >
+          Quiz
+        </button>
+        {quizFolders.map((folder) => (
+          <button
+            key={folder.id}
+            type="button"
+            onClick={() => setSelectedFolderId(folder.id)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === folder.id ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+          >
+            {folder.name} ({folder.itemIds.length})
+          </button>
+        ))}
       </div>
 
       {notesLoading ? (
@@ -169,98 +307,36 @@ const QuizHubPage = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          <section className="space-y-4">
-            {quizzes.length ? (
-              <div className="space-y-4">
-                {quizzes.map((quiz) => (
-                  <button
-                    key={quiz.id}
-                    type="button"
-                    onClick={() => setActiveQuizId(quiz.id)}
-                    className={`panel w-full text-left rounded-[28px] p-5 transition hover:-translate-y-1 ${activeQuiz?.id === quiz.id ? 'ring-2 ring-[var(--accent)]' : ''}`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-lg font-bold text-main">{quiz.note_title}</p>
-                        <p className="mt-1 text-sm text-muted">
-                          Quiz from {quiz.folder_name || 'My Notes'} • {quiz.questions_json.length} questions
-                        </p>
-                      </div>
-                      <div className="glass-chip rounded-full px-3 py-2 text-xs font-semibold text-[var(--accent-strong)]">
-                        {quiz.difficulty}
-                      </div>
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {quizzesInSelectedFolder.length ? (
+              quizzesInSelectedFolder.map((quiz) => (
+                <button
+                  key={quiz.id}
+                  type="button"
+                  onClick={() => selectionMode ? toggleSelection(quiz.id) : navigate(`/quiz/${quiz.id}`)}
+                  className="panel text-left rounded-[28px] p-5 transition hover:-translate-y-1"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-bold text-main">{quiz.note_title}</p>
+                      <p className="mt-1 text-sm text-muted">
+                        Quiz from {folderNameByQuizId.get(quiz.id) || quiz.folder_name || 'Quiz'} • {quiz.questions_json.length} questions
+                      </p>
                     </div>
-                  </button>
-                ))}
-              </div>
+                    <div className="glass-chip rounded-full px-3 py-2 text-xs font-semibold text-[var(--accent-strong)]">
+                      {quiz.difficulty}
+                    </div>
+                  </div>
+                  {selectionMode && selectedQuizzes.includes(quiz.id) ? (
+                    <div className="mt-4 inline-flex rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">
+                      Selected
+                    </div>
+                  ) : null}
+                </button>
+              ))
             ) : (
               <div className="panel rounded-[28px] p-6 text-sm text-muted">
                 No quizzes yet. Use the plus button to choose a note and generate one here.
-              </div>
-            )}
-          </section>
-
-          <section className="panel rounded-[32px] p-6">
-            {activeQuiz ? (
-              <div className="space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-main">{activeQuiz.note_title}</h2>
-                    <p className="mt-1 text-sm text-muted">Quiz from {activeQuiz.folder_name || 'My Notes'}</p>
-                  </div>
-                  <div className="glass-chip rounded-full px-3 py-2 text-xs font-semibold text-[var(--accent-strong)]">
-                    {new Date(activeQuiz.created_at).toLocaleDateString()}
-                  </div>
-                </div>
-
-                {activeQuiz.questions_json.map((question, index) => (
-                  <div key={`${question.question}-${index}`} className="panel-soft rounded-[24px] p-5">
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--accent)]">Question {index + 1}</p>
-                    <h3 className="mt-2 text-lg font-bold text-main">{question.question}</h3>
-                    <div className="mt-4 grid gap-2">
-                      {question.options.map((option) => (
-                        <div
-                          key={option}
-                          className={`rounded-2xl px-4 py-3 text-sm ${
-                            option === question.answer ? 'border border-emerald-200' : 'border border-transparent'
-                          }`}
-                          style={
-                            option === question.answer
-                              ? { background: 'var(--success-soft)', color: 'var(--text-main)' }
-                              : { background: 'var(--surface)', color: 'var(--text-soft)' }
-                          }
-                        >
-                          {option}
-                        </div>
-                      ))}
-                    </div>
-                    {question.explanation ? (
-                      <p className="mt-4 text-sm leading-7 text-muted">{question.explanation}</p>
-                    ) : null}
-                  </div>
-                ))}
-
-                {audio?.public_url ? (
-                  <div className="panel-soft rounded-[24px] p-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Button onClick={play} disabled={playing}>Play quiz audio</Button>
-                      <Button variant="secondary" onClick={pause}>Pause</Button>
-                      <a
-                        href={audio.public_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-2xl border px-4 py-2.5 text-sm font-semibold text-soft"
-                        style={{ borderColor: 'var(--border-soft)', background: 'var(--surface)' }}
-                      >
-                        Open audio
-                      </a>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="flex min-h-[320px] items-center justify-center text-center text-sm text-muted">
-                Pick or create a quiz to see the full set of questions here.
               </div>
             )}
           </section>
@@ -295,15 +371,15 @@ const QuizHubPage = () => {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setSelectedFolderId(null)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === null ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+              onClick={() => setPickerFolderId(null)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${pickerFolderId === null ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
             >
               All notes
             </button>
             <button
               type="button"
-              onClick={() => setSelectedFolderId('my-notes')}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === 'my-notes' ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+              onClick={() => setPickerFolderId('my-notes')}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition ${pickerFolderId === 'my-notes' ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
             >
               My Notes
             </button>
@@ -311,8 +387,8 @@ const QuizHubPage = () => {
               <button
                 key={folder.id}
                 type="button"
-                onClick={() => setSelectedFolderId(folder.id)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${selectedFolderId === folder.id ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
+                onClick={() => setPickerFolderId(folder.id)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${pickerFolderId === folder.id ? 'bg-[var(--accent)] text-white' : 'glass-chip'}`}
               >
                 {folder.name}
               </button>
@@ -338,6 +414,45 @@ const QuizHubPage = () => {
                 No notes found in this section yet.
               </div>
             ) : null}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={foldersOpen} title="Quiz folders" onClose={() => setFoldersOpen(false)}>
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={folderName}
+              onChange={(event) => setFolderName(event.target.value)}
+              placeholder="Create a quiz folder"
+              className="input-field flex-1"
+            />
+            <Button onClick={handleCreateFolder}>
+              <FolderOpen size={16} />
+              Create
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {quizFolders.length ? (
+              quizFolders.map((folder) => (
+                <div key={folder.id} className="panel-soft flex items-center justify-between rounded-2xl p-4">
+                  <div>
+                    <p className="font-semibold text-main">{folder.name}</p>
+                    <p className="text-sm text-muted">{folder.itemIds.length} quizzes</p>
+                  </div>
+                  <Button variant="danger" onClick={() => handleDeleteFolder(folder)}>
+                    <Trash2 size={16} />
+                    Delete
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <div className="panel-soft rounded-2xl p-4 text-sm text-muted">
+                No quiz folders yet.
+              </div>
+            )}
           </div>
         </div>
       </Modal>

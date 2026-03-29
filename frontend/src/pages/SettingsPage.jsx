@@ -3,11 +3,13 @@ import toast from 'react-hot-toast'
 import Button from '../components/ui/Button'
 import { useUserStore } from '../store/userStore'
 import { useStudyStore } from '../store/studyStore'
+import { createTranslator } from '../utils/appText'
 import { languageOptions } from '../utils/languageMap'
 
 const SettingsPage = () => {
   const { profile, refreshProfile, updateProfile, loading } = useUserStore()
   const { voices, initializeSpeechOptions } = useStudyStore()
+  const t = createTranslator(profile?.preferred_language)
   const [form, setForm] = useState({
     full_name: '',
     preferred_language: 'en',
@@ -38,8 +40,8 @@ const SettingsPage = () => {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-main">Settings</h1>
-        <p className="text-sm text-muted">Manage your default language, voice, and profile preferences.</p>
+        <h1 className="text-3xl font-bold text-main">{t('settings')}</h1>
+        <p className="text-sm text-muted">{t('settings_copy')}</p>
       </div>
 
       <div className="panel rounded-[28px] p-6 space-y-4">
@@ -48,7 +50,7 @@ const SettingsPage = () => {
             value={form.full_name}
             onChange={(event) => updateField('full_name', event.target.value)}
             className="input-field"
-            placeholder="Full name"
+            placeholder={t('full_name')}
           />
           <input
             value={profile?.email ?? ''}
@@ -71,7 +73,7 @@ const SettingsPage = () => {
             onChange={(event) => updateField('preferred_voice', event.target.value)}
             className="select-field"
           >
-            <option value="">Use app default voice</option>
+            <option value="">{t('use_app_default_voice')}</option>
             {voices.map((voice) => (
               <option key={voice.id} value={voice.id}>
                 {voice.label}
@@ -86,9 +88,9 @@ const SettingsPage = () => {
           onChange={(event) => updateField('ui_theme', event.target.value)}
           className="select-field"
         >
-          <option value="system">system</option>
-          <option value="light">light</option>
-          <option value="dark">dark</option>
+          <option value="system">{t('system')}</option>
+          <option value="light">{t('light')}</option>
+          <option value="dark">{t('dark')}</option>
         </select>
 
         <Button
@@ -102,7 +104,7 @@ const SettingsPage = () => {
           }}
           disabled={loading}
         >
-          Save settings
+          {t('save_settings')}
         </Button>
       </div>
     </div>

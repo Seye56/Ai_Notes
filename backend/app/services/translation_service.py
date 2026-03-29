@@ -38,6 +38,19 @@ class TranslationService:
         return translation
 
     @staticmethod
+    def translate_text(
+        *,
+        text: str,
+        source_language: str | None,
+        target_language: str,
+    ) -> str:
+        return TranslationService._translate_text(
+            text=text,
+            source_language=source_language,
+            target_language=target_language,
+        )
+
+    @staticmethod
     def _translate_text(
         *,
         text: str,

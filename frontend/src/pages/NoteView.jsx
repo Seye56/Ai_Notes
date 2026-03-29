@@ -4,13 +4,19 @@ import toast from 'react-hot-toast'
 import { MoreHorizontal, PenLine } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
+import Modal from '../components/ui/Modal'
 import NoteEditor from '../components/notes/NoteEditor'
 import { useNoteStore } from '../store/noteStore'
+import { useUserStore } from '../store/userStore'
+import { createTranslator } from '../utils/appText'
+import { getLanguageLabel, languageOptions } from '../utils/languageMap'
 
 const NoteView = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { selectedNote, fetchNote, updateNote, deleteNote, loading, saving } = useNoteStore()
+  const { profile } = useUserStore()
+  const t = createTranslator(profile?.preferred_language)
+  const { selectedNote, fetchNote, updateNote, deleteNote, createTranslatedNote, loading, saving } = useNoteStore()
   const [draft, setDraft] = useState({
     title: '',
     content: '',
@@ -18,6 +24,8 @@ const NoteView = () => {
   })
   const [actionsOpen, setActionsOpen] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
+  const [translateOpen, setTranslateOpen] = useState(false)
+  const [targetLanguage, setTargetLanguage] = useState(profile?.preferred_language || 'fr')
 
   useEffect(() => {
     fetchNote(id).catch((error) => toast.error(error.message))
@@ -58,6 +66,24 @@ const NoteView = () => {
     }
   }
 
+  const handleTranslate = async () => {
+    try {
+      const languageLabel = getLanguageLabel(targetLanguage)
+      const translatedNote = await createTranslatedNote({
+        noteId: id,
+        title: `${languageLabel}-${draft.title || t('untitled_note')}`,
+        targetLanguage: languageLabel,
+        targetLanguageCode: targetLanguage,
+      })
+      setTranslateOpen(false)
+      setActionsOpen(false)
+      toast.success('Translated note created.')
+      navigate(`/note/${translatedNote.id}`)
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }
+
   if (loading && !selectedNote) {
     return (
       <div className="panel rounded-[28px] p-6">
@@ -83,32 +109,32 @@ const NoteView = () => {
                   }
                 }}
                 className="input-field max-w-xl text-2xl font-bold"
-                placeholder="Untitled Note"
+                placeholder={t('untitled_note')}
                 autoFocus
               />
             ) : (
-              <h1 className="text-3xl font-bold text-main">{draft.title || 'Untitled Note'}</h1>
+              <h1 className="text-3xl font-bold text-main">{draft.title || t('untitled_note')}</h1>
             )}
             <button
               type="button"
               onClick={() => setEditingTitle((current) => !current)}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-soft transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)]"
               style={{ borderColor: 'var(--border-soft)', background: 'var(--surface)' }}
-              aria-label="Edit note title"
+              aria-label={t('edit_note_title')}
             >
               <PenLine size={16} />
             </button>
           </div>
-          <p className="text-sm text-muted">Edit your note, then open study mode or quiz mode.</p>
+          <p className="text-sm text-muted">{t('edit_your_note')}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save note'}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? t('saving') : t('save_note')}</Button>
           <div className="relative">
             <Button
               variant="secondary"
               className="h-12 w-12 rounded-full px-0"
               onClick={() => setActionsOpen((open) => !open)}
-              aria-label="More note actions"
+              aria-label={t('more_note_actions')}
             >
               <MoreHorizontal size={18} />
             </Button>
@@ -122,7 +148,7 @@ const NoteView = () => {
                   }}
                   className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                 >
-                  Summary
+                  {t('summary')}
                 </button>
                 <button
                   type="button"
@@ -132,14 +158,24 @@ const NoteView = () => {
                   }}
                   className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
                 >
-                  Quiz
+                  {t('quiz')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionsOpen(false)
+                    setTranslateOpen(true)
+                  }}
+                  className="rounded-xl px-3 py-2 text-left text-sm font-medium text-main transition hover:bg-[var(--accent-soft)]"
+                >
+                  Translate
                 </button>
                 <button
                   type="button"
                   onClick={handleDelete}
                   className="rounded-xl px-3 py-2 text-left text-sm font-medium text-rose-500 transition hover:bg-[var(--danger-soft)]"
                 >
-                  Delete
+                  {t('delete')}
                 </button>
               </div>
             ) : null}
@@ -148,6 +184,25 @@ const NoteView = () => {
       </div>
 
       <NoteEditor note={draft} onChange={updateField} />
+
+      <Modal open={translateOpen} title="Translate note" onClose={() => setTranslateOpen(false)}>
+        <div className="space-y-4">
+          <select
+            value={targetLanguage}
+            onChange={(event) => setTargetLanguage(event.target.value)}
+            className="select-field text-sm"
+          >
+            {languageOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <Button onClick={handleTranslate} disabled={saving}>
+            Create translated note
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }
