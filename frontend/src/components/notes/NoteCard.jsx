@@ -1,11 +1,11 @@
 import { Check, MoreHorizontal } from 'lucide-react'
 
 const colorMap = {
-  blue: 'linear-gradient(135deg, rgba(96, 165, 250, 0.22), rgba(191, 219, 254, 0.14))',
-  pink: 'linear-gradient(135deg, rgba(244, 114, 182, 0.18), rgba(251, 207, 232, 0.12))',
-  yellow: 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(254, 240, 138, 0.12))',
-  mint: 'linear-gradient(135deg, rgba(52, 211, 153, 0.18), rgba(209, 250, 229, 0.1))',
-  purple: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(221, 214, 254, 0.12))',
+  blue: 'linear-gradient(135deg, rgba(125, 211, 252, 0.46), rgba(191, 219, 254, 0.28))',
+  pink: 'linear-gradient(135deg, rgba(249, 168, 212, 0.42), rgba(251, 207, 232, 0.24))',
+  yellow: 'linear-gradient(135deg, rgba(253, 224, 71, 0.42), rgba(254, 240, 138, 0.28))',
+  mint: 'linear-gradient(135deg, rgba(134, 239, 172, 0.42), rgba(209, 250, 229, 0.22))',
+  purple: 'linear-gradient(135deg, rgba(196, 181, 253, 0.44), rgba(221, 214, 254, 0.26))',
 }
 
 const NoteCard = ({

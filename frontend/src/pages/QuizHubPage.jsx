@@ -10,6 +10,16 @@ import { useStudyStore } from '../store/studyStore'
 import { useUserStore } from '../store/userStore'
 import { languageOptions } from '../utils/languageMap'
 
+const tileColorMap = {
+  blue: 'linear-gradient(135deg, rgba(125, 211, 252, 0.46), rgba(191, 219, 254, 0.28))',
+  pink: 'linear-gradient(135deg, rgba(249, 168, 212, 0.42), rgba(251, 207, 232, 0.24))',
+  yellow: 'linear-gradient(135deg, rgba(253, 224, 71, 0.42), rgba(254, 240, 138, 0.28))',
+  mint: 'linear-gradient(135deg, rgba(134, 239, 172, 0.42), rgba(209, 250, 229, 0.22))',
+  purple: 'linear-gradient(135deg, rgba(196, 181, 253, 0.44), rgba(221, 214, 254, 0.26))',
+}
+
+const tileColors = ['purple', 'blue', 'pink', 'yellow', 'mint']
+
 const QuizHubPage = () => {
   const navigate = useNavigate()
   const { profile } = useUserStore()
@@ -309,12 +319,17 @@ const QuizHubPage = () => {
         <div className="space-y-6">
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {quizzesInSelectedFolder.length ? (
-              quizzesInSelectedFolder.map((quiz) => (
+              quizzesInSelectedFolder.map((quiz, index) => (
                 <button
                   key={quiz.id}
                   type="button"
                   onClick={() => selectionMode ? toggleSelection(quiz.id) : navigate(`/quiz/${quiz.id}`)}
-                  className="panel text-left rounded-[28px] p-5 transition hover:-translate-y-1"
+                  className="rounded-[28px] border p-5 text-left transition hover:-translate-y-1"
+                  style={{
+                    background: tileColorMap[tileColors[index % tileColors.length]],
+                    borderColor: selectedQuizzes.includes(quiz.id) ? 'var(--accent)' : 'var(--border-soft)',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>

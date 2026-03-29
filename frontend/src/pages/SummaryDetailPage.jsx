@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { MoreHorizontal } from 'lucide-react'
+import { Mic, MoreHorizontal } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
@@ -13,10 +13,13 @@ const SummaryDetailPage = () => {
   const navigate = useNavigate()
   const { summaryId } = useParams()
   const { profile } = useUserStore()
-  const { summaries, summaryFolders, hydrateSummaries, hydrateSummaryFolders, translateSummaryDocument, loading } = useStudyStore()
+  const { summaries, summaryFolders, hydrateSummaries, hydrateSummaryFolders, translateSummaryDocument, generateSpeech, loading } = useStudyStore()
   const [actionsOpen, setActionsOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [targetLanguage, setTargetLanguage] = useState(profile?.preferred_language || 'fr')
+  const [loadingAudio, setLoadingAudio] = useState(false)
+  const [playingAudio, setPlayingAudio] = useState(false)
+  const audioRef = useRef(null)
 
   useEffect(() => {
     if (profile?.id) {
@@ -24,6 +27,13 @@ const SummaryDetailPage = () => {
       hydrateSummaryFolders(profile.id)
     }
   }, [hydrateSummaries, hydrateSummaryFolders, profile?.id])
+
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+  }, [])
 
   const summary = useMemo(
     () => summaries.find((item) => item.id === summaryId) ?? null,
@@ -54,6 +64,40 @@ const SummaryDetailPage = () => {
     }
   }
 
+  const handleReadAloud = async () => {
+    if (!summary) {
+      return
+    }
+
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+
+      setLoadingAudio(true)
+      const audio = await generateSpeech({
+        source_type: 'summary',
+        source_id: summary.id,
+        source_language: summary.translated_language || summary.source_language,
+        gender: 'female',
+        mood: 'narration',
+        language: summary.translated_language || summary.source_language || 'en',
+      })
+
+      const player = new Audio(audio.public_url)
+      audioRef.current = player
+      player.onended = () => setPlayingAudio(false)
+      player.onerror = () => setPlayingAudio(false)
+      await player.play()
+      setPlayingAudio(true)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setLoadingAudio(false)
+    }
+  }
+
   if (!profile) {
     return (
       <div className="panel rounded-[28px] p-6">
@@ -78,6 +122,16 @@ const SummaryDetailPage = () => {
           <p className="text-sm text-muted">Summarized from {folderName}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleReadAloud}
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full border transition ${loadingAudio || playingAudio ? 'bg-[var(--accent)] text-white shadow-lg shadow-purple-300/40' : 'bg-[var(--surface)] text-[var(--accent-strong)]'}`}
+            style={{ borderColor: loadingAudio || playingAudio ? 'var(--accent)' : 'var(--border-soft)' }}
+            aria-label="Read summary aloud"
+            disabled={loadingAudio}
+          >
+            <Mic size={18} />
+          </button>
           <div className="glass-chip rounded-full px-3 py-2 text-xs font-semibold text-[var(--accent-strong)]">
             {new Date(summary.created_at).toLocaleDateString()}
           </div>

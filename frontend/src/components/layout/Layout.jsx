@@ -72,17 +72,6 @@ const Layout = () => {
           })}
         </nav>
 
-        <div className="rounded-3xl p-4 text-white shadow-lg shadow-violet-200" style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #ec4899 100%)' }}>
-          <p className="text-xs uppercase tracking-[0.2em] text-violet-100">{t('focus_mode')}</p>
-          <p className="mt-2 text-sm font-medium leading-6">
-            {t('focus_mode_copy')}
-          </p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs">
-            <BookOpen size={14} />
-            {t('ready_to_study')}
-          </div>
-        </div>
-
         <div className="mt-auto px-2 pt-6">
           <div className="sidebar-pill flex items-center gap-3 rounded-2xl px-3 py-3">
             <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-800 font-bold text-sm">

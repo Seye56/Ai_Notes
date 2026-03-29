@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { MoreHorizontal, PenLine } from 'lucide-react'
+import { Mic, MoreHorizontal, PenLine } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Loader from '../components/ui/Loader'
 import Modal from '../components/ui/Modal'
 import NoteEditor from '../components/notes/NoteEditor'
 import { useNoteStore } from '../store/noteStore'
+import { useStudyStore } from '../store/studyStore'
 import { useUserStore } from '../store/userStore'
 import { createTranslator } from '../utils/appText'
 import { getLanguageLabel, languageOptions } from '../utils/languageMap'
@@ -17,6 +18,7 @@ const NoteView = () => {
   const { profile } = useUserStore()
   const t = createTranslator(profile?.preferred_language)
   const { selectedNote, fetchNote, updateNote, deleteNote, createTranslatedNote, loading, saving } = useNoteStore()
+  const { generateSpeech } = useStudyStore()
   const [draft, setDraft] = useState({
     title: '',
     content: '',
@@ -26,6 +28,9 @@ const NoteView = () => {
   const [editingTitle, setEditingTitle] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [targetLanguage, setTargetLanguage] = useState(profile?.preferred_language || 'fr')
+  const [loadingAudio, setLoadingAudio] = useState(false)
+  const [playingAudio, setPlayingAudio] = useState(false)
+  const audioRef = useRef(null)
 
   useEffect(() => {
     fetchNote(id).catch((error) => toast.error(error.message))
@@ -41,6 +46,13 @@ const NoteView = () => {
       setEditingTitle(false)
     }
   }, [id, selectedNote])
+
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+  }, [])
 
   const updateField = (field, value) => {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -81,6 +93,36 @@ const NoteView = () => {
       navigate(`/note/${translatedNote.id}`)
     } catch (error) {
       toast.error(error.message)
+    }
+  }
+
+  const handleReadAloud = async () => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+
+      setLoadingAudio(true)
+      const audio = await generateSpeech({
+        source_type: 'note',
+        source_id: id,
+        source_language: draft.source_language,
+        gender: 'female',
+        mood: 'narration',
+        language: draft.source_language || 'en',
+      })
+
+      const player = new Audio(audio.public_url)
+      audioRef.current = player
+      player.onended = () => setPlayingAudio(false)
+      player.onerror = () => setPlayingAudio(false)
+      await player.play()
+      setPlayingAudio(true)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setLoadingAudio(false)
     }
   }
 
@@ -128,6 +170,16 @@ const NoteView = () => {
           <p className="text-sm text-muted">{t('edit_your_note')}</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleReadAloud}
+            className={`inline-flex h-12 w-12 items-center justify-center rounded-full border transition ${loadingAudio || playingAudio ? 'bg-[var(--accent)] text-white shadow-lg shadow-purple-300/40' : 'bg-[var(--surface)] text-[var(--accent-strong)]'}`}
+            style={{ borderColor: loadingAudio || playingAudio ? 'var(--accent)' : 'var(--border-soft)' }}
+            aria-label="Read note aloud"
+            disabled={loadingAudio}
+          >
+            <Mic size={18} />
+          </button>
           <Button onClick={handleSave} disabled={saving}>{saving ? t('saving') : t('save_note')}</Button>
           <div className="relative">
             <Button
