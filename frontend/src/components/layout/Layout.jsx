@@ -1,43 +1,62 @@
-import { Link, Outlet, useLocation } from 'react-router-dom'
-import { FileText, Home, BookOpen, Settings, Brain } from 'lucide-react'
+import { useEffect } from 'react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { BookOpen, Brain, FileText, LogOut, Settings, Users } from 'lucide-react'
+import { Toaster } from 'react-hot-toast'
+import { useUserStore } from '../../store/userStore'
 
 const navLinks = [
-  { to: '/', label: 'Dashboard', icon: Home },
+  { to: '/', label: 'Dashboard', icon: Brain },
   { to: '/notes', label: 'My Notes', icon: FileText },
-  { to: '/study', label: 'Study Mode', icon: BookOpen },
+  { to: '/groups', label: 'Groups', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 const Layout = () => {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { profile, initialized, hydrateSession, logout } = useUserStore()
+
+  useEffect(() => {
+    hydrateSession()
+  }, [hydrateSession])
+
+  useEffect(() => {
+    if (initialized && !profile) {
+      navigate('/login')
+    }
+  }, [initialized, navigate, profile])
+
+  if (!initialized) {
+    return <div className="app-shell min-h-screen flex items-center justify-center text-muted">Loading your workspace...</div>
+  }
 
   return (
-    <div className="min-h-screen bg-[#f6f7fb] flex">
+    <div className="app-shell min-h-screen flex">
+      <Toaster position="top-right" />
 
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-60 bg-white shadow-md flex flex-col py-6 px-4 z-20">
-
-        {/* Logo */}
-        <div className="flex items-center gap-2 mb-10 px-2">
-          <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center">
+      <aside className="sidebar-shell fixed left-0 top-0 h-full w-64 flex flex-col py-6 px-4 z-20">
+        <div className="flex items-center gap-3 mb-10 px-2">
+          <div className="w-10 h-10 bg-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200">
             <Brain size={18} className="text-white" />
           </div>
-          <span className="font-bold text-lg text-gray-800">AI Notes</span>
+          <div>
+            <span className="font-bold text-lg text-main block leading-tight">AI Notes</span>
+            <span className="text-xs text-muted">Study smarter, together</span>
+          </div>
         </div>
 
-        {/* Nav Links */}
         <nav className="flex flex-col gap-1">
           {navLinks.map(({ to, label, icon: Icon }) => {
-            const isActive = location.pathname === to
+            const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`)
             return (
               <Link
                 key={to}
                 to={to}
-                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition
-                  ${isActive
-                    ? 'bg-purple-100 text-purple-700 font-semibold'
-                    : 'text-gray-600 hover:bg-purple-50 hover:text-purple-700'
-                  }`}
+                className={`nav-link flex items-center gap-3 px-3 py-3 rounded-2xl text-sm transition ${
+                  isActive
+                    ? 'nav-link-active font-semibold'
+                    : ''
+                }`}
               >
                 <Icon size={18} />
                 {label}
@@ -46,46 +65,62 @@ const Layout = () => {
           })}
         </nav>
 
-        {/* Bottom user pill */}
-        <div className="mt-auto px-2">
-          <div className="flex items-center gap-3 bg-purple-50 rounded-xl px-3 py-3">
-            <div className="w-8 h-8 rounded-full bg-purple-300 flex items-center justify-center text-purple-800 font-bold text-sm">
-              A
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-800">Student</p>
-              <p className="text-xs text-gray-400">Free Plan</p>
-            </div>
+        <div className="rounded-3xl p-4 text-white shadow-lg shadow-violet-200" style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #ec4899 100%)' }}>
+          <p className="text-xs uppercase tracking-[0.2em] text-violet-100">Focus mode</p>
+          <p className="mt-2 text-sm font-medium leading-6">
+            Summaries, quizzes, speech and live collaboration are all connected to your backend now.
+          </p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs">
+            <BookOpen size={14} />
+            Ready to study
           </div>
         </div>
 
+        <div className="mt-auto px-2 pt-6">
+          <div className="sidebar-pill flex items-center gap-3 rounded-2xl px-3 py-3">
+            <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-800 font-bold text-sm">
+              {profile?.full_name?.[0] ?? profile?.email?.[0]?.toUpperCase() ?? 'A'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-main truncate">{profile?.full_name || 'Student'}</p>
+              <p className="text-xs text-muted truncate">{profile?.email}</p>
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              await logout()
+              navigate('/login')
+            }}
+            className="mt-3 w-full flex items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 text-sm font-medium text-soft hover:bg-[var(--accent-soft)]"
+            style={{ borderColor: 'var(--border-soft)', background: 'var(--surface)' }}
+          >
+            <LogOut size={16} />
+            Sign out
+          </button>
+        </div>
       </aside>
 
-      {/* Right side */}
-      <div className="ml-60 flex-1 flex flex-col">
-
-        {/* Header */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6 sticky top-0 z-10">
-          <input
-            type="text"
-            placeholder="Search notes..."
-            className="bg-gray-100 rounded-xl px-4 py-2 text-sm w-64 outline-none focus:ring-2 focus:ring-purple-300 transition"
-          />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-400">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </span>
-            <div className="w-9 h-9 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold text-sm cursor-pointer">
-              A
-            </div>
+      <div className="ml-64 flex-1 flex flex-col min-h-screen">
+        <header className="flex h-18 items-center justify-between px-8 sticky top-0 z-10 backdrop-blur border-b" style={{ background: 'var(--surface)', borderColor: 'var(--border-soft)' }}>
+          <div>
+            <p className="text-sm text-muted">Workspace</p>
+            <p className="text-base font-semibold text-main">
+              {new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-semibold text-soft">{profile?.preferred_language?.toUpperCase() || 'EN'}</p>
+            <p className="text-xs text-muted">Default study language</p>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-8">
           <Outlet />
         </main>
-
       </div>
     </div>
   )
