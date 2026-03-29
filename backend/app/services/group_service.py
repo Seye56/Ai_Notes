@@ -1,14 +1,163 @@
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, WebSocket, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.group import Group, GroupMember, GroupNoteEvent, GroupPresence
 from app.models.user import Profile
-from app.schemas.group import GroupCreate, GroupEventCreate, GroupMemberAdd, GroupPresenceUpdate
+from app.schemas.group import GroupCreate, GroupEventCreate, GroupMemberAdd, GroupPresenceUpdate, GroupSocketEventCreate
 from app.services.translation_service import TranslationService
+
+
+@dataclass
+class GroupSocketConnection:
+    user_id: UUID
+    language: str
+    websocket: WebSocket
+
+
+class GroupSocketManager:
+    def __init__(self) -> None:
+        self._connections: dict[UUID, dict[UUID, list[GroupSocketConnection]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+
+    async def connect(
+        self,
+        group_id: UUID,
+        profile: Profile,
+        websocket: WebSocket,
+        language: str,
+    ) -> None:
+        await websocket.accept()
+        self._connections[group_id][profile.id].append(
+            GroupSocketConnection(
+                user_id=profile.id,
+                language=language,
+                websocket=websocket,
+            )
+        )
+
+    def disconnect(self, group_id: UUID, user_id: UUID, websocket: WebSocket) -> None:
+        group_connections = self._connections.get(group_id)
+        if not group_connections:
+            return
+
+        user_connections = group_connections.get(user_id, [])
+        group_connections[user_id] = [
+            connection
+            for connection in user_connections
+            if connection.websocket is not websocket
+        ]
+        if not group_connections[user_id]:
+            group_connections.pop(user_id, None)
+        if not group_connections:
+            self._connections.pop(group_id, None)
+
+    def has_user_connections(self, group_id: UUID, user_id: UUID) -> bool:
+        group_connections = self._connections.get(group_id, {})
+        return bool(group_connections.get(user_id))
+
+    async def send_presence_snapshot(
+        self,
+        websocket: WebSocket,
+        presences: list[GroupPresence],
+    ) -> None:
+        await websocket.send_json(
+            {
+                "type": "presence_snapshot",
+                "presences": [GroupService.serialize_presence(presence) for presence in presences],
+            }
+        )
+
+    async def broadcast_group_event(
+        self,
+        db: Session,
+        group: Group,
+        event: GroupNoteEvent,
+    ) -> None:
+        group_connections = self._connections.get(group.id, {})
+        if not group_connections:
+            return
+
+        translations_by_language: dict[str, str] = {}
+        stale_connections: list[tuple[UUID, WebSocket]] = []
+
+        for user_id, connections in group_connections.items():
+            for connection in connections:
+                delivered_text, delivered_language = GroupService.translate_live_event_for_language(
+                    event=event,
+                    target_language=connection.language,
+                    translation_cache=translations_by_language,
+                )
+                payload = {
+                    "type": "group_note_event",
+                    "event_id": str(event.id),
+                    "group_id": str(event.group_id),
+                    "sender_id": str(event.sender_id),
+                    "recipient_user_id": str(user_id),
+                    "original_text": event.original_text,
+                    "original_language": event.original_language,
+                    "translated_text": delivered_text,
+                    "translated_language": delivered_language,
+                    "event_type": event.event_type,
+                    "created_at": event.created_at.isoformat(),
+                }
+                try:
+                    await connection.websocket.send_json(payload)
+                except Exception:
+                    stale_connections.append((user_id, connection.websocket))
+
+        for user_id, websocket in stale_connections:
+            self.disconnect(group.id, user_id, websocket)
+
+    async def broadcast_presence_update(self, group_id: UUID, presence: GroupPresence) -> None:
+        group_connections = self._connections.get(group_id, {})
+        if not group_connections:
+            return
+
+        payload = {
+            "type": "presence_update",
+            "presence": GroupService.serialize_presence(presence),
+        }
+        stale_connections: list[tuple[UUID, WebSocket]] = []
+        for user_id, connections in group_connections.items():
+            for connection in connections:
+                try:
+                    await connection.websocket.send_json(payload)
+                except Exception:
+                    stale_connections.append((user_id, connection.websocket))
+
+        for user_id, websocket in stale_connections:
+            self.disconnect(group_id, user_id, websocket)
+
+    async def broadcast_presence_removed(self, group_id: UUID, user_id: UUID) -> None:
+        group_connections = self._connections.get(group_id, {})
+        if not group_connections:
+            return
+
+        payload = {
+            "type": "presence_removed",
+            "group_id": str(group_id),
+            "user_id": str(user_id),
+        }
+        stale_connections: list[tuple[UUID, WebSocket]] = []
+        for member_id, connections in group_connections.items():
+            for connection in connections:
+                try:
+                    await connection.websocket.send_json(payload)
+                except Exception:
+                    stale_connections.append((member_id, connection.websocket))
+
+        for member_id, websocket in stale_connections:
+            self.disconnect(group_id, member_id, websocket)
+
+
+group_socket_manager = GroupSocketManager()
 
 
 class GroupService:
@@ -175,6 +324,28 @@ class GroupService:
         return event
 
     @staticmethod
+    def create_socket_event(
+        db: Session,
+        owner: Profile,
+        group_id: UUID | str,
+        payload: GroupSocketEventCreate,
+    ) -> tuple[Group, GroupNoteEvent]:
+        group = GroupService.get_group_or_404(db, owner, group_id)
+        event = GroupNoteEvent(
+            group_id=group.id,
+            sender_id=owner.id,
+            original_text=payload.original_text,
+            original_language=payload.original_language,
+            translated_text=None,
+            translated_language=None,
+            event_type=payload.event_type,
+        )
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+        return group, event
+
+    @staticmethod
     def list_events(
         db: Session,
         owner: Profile,
@@ -253,6 +424,49 @@ class GroupService:
 
         db.delete(presence)
         db.commit()
+
+    @staticmethod
+    def resolve_socket_language(
+        db: Session,
+        group: Group,
+        owner: Profile,
+        requested_language: str | None,
+    ) -> str:
+        return requested_language or owner.preferred_language or group.default_language
+
+    @staticmethod
+    def translate_live_event_for_language(
+        *,
+        event: GroupNoteEvent,
+        target_language: str,
+        translation_cache: dict[str, str],
+    ) -> tuple[str, str]:
+        if target_language.lower() == event.original_language.lower():
+            return event.original_text, event.original_language
+
+        cached = translation_cache.get(target_language)
+        if cached is None:
+            cached = TranslationService._translate_text(
+                text=event.original_text,
+                source_language=event.original_language,
+                target_language=target_language,
+            )
+            translation_cache[target_language] = cached
+        return cached, target_language
+
+    @staticmethod
+    def serialize_presence(presence: GroupPresence) -> dict[str, object]:
+        return {
+            "id": str(presence.id),
+            "group_id": str(presence.group_id),
+            "user_id": str(presence.user_id),
+            "cursor_position": presence.cursor_position,
+            "selection_start": presence.selection_start,
+            "selection_end": presence.selection_end,
+            "is_typing": presence.is_typing,
+            "last_seen": presence.last_seen.isoformat(),
+            "updated_at": presence.updated_at.isoformat(),
+        }
 
     @staticmethod
     def _require_group_manager(db: Session, owner: Profile, group: Group) -> None:

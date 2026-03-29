@@ -74,3 +74,9 @@ class GroupPresenceRead(BaseModel):
     is_typing: bool
     last_seen: datetime
     updated_at: datetime
+
+
+class GroupSocketEventCreate(BaseModel):
+    original_text: str
+    original_language: str
+    event_type: str = "live_note"
