@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -8,7 +9,6 @@ TranslationType = Literal["text", "spoken", "live"]
 
 
 class TranslationCreate(BaseModel):
-    note_id: str
     target_language: str
     translation_type: TranslationType = "text"
 
@@ -23,8 +23,8 @@ class TextTranslationRequest(BaseModel):
 class TranslationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    note_id: str
+    id: UUID
+    note_id: UUID
     target_language: str
     translated_content: str
     translation_type: str
