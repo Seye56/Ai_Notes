@@ -310,13 +310,17 @@ class GroupService:
         payload: GroupEventCreate,
     ) -> GroupNoteEvent:
         group = GroupService.get_group_or_404(db, owner, group_id)
+        detected_language = TranslationService.detect_language(
+            text=payload.original_text,
+            fallback_language=payload.original_language or owner.preferred_language or group.default_language,
+        )
         translated_text: str | None = None
         translated_language = payload.translated_language
 
         if translated_language:
             translated_text = TranslationService._translate_text(
                 text=payload.original_text,
-                source_language=payload.original_language,
+                source_language=detected_language,
                 target_language=translated_language,
             )
 
@@ -324,7 +328,7 @@ class GroupService:
             group_id=group.id,
             sender_id=owner.id,
             original_text=payload.original_text,
-            original_language=payload.original_language,
+            original_language=detected_language,
             translated_text=translated_text,
             translated_language=translated_language,
             event_type=payload.event_type,
@@ -342,11 +346,15 @@ class GroupService:
         payload: GroupSocketEventCreate,
     ) -> tuple[Group, GroupNoteEvent]:
         group = GroupService.get_group_or_404(db, owner, group_id)
+        detected_language = TranslationService.detect_language(
+            text=payload.original_text,
+            fallback_language=payload.original_language or owner.preferred_language or group.default_language,
+        )
         event = GroupNoteEvent(
             group_id=group.id,
             sender_id=owner.id,
             original_text=payload.original_text,
-            original_language=payload.original_language,
+            original_language=detected_language,
             translated_text=None,
             translated_language=None,
             event_type=payload.event_type,
@@ -369,6 +377,26 @@ class GroupService:
             .order_by(GroupNoteEvent.created_at.asc())
         )
         return list(db.scalars(stmt).all())
+
+    @staticmethod
+    def list_events_for_viewer(
+        db: Session,
+        owner: Profile,
+        group_id: UUID | str,
+    ) -> list[dict[str, object]]:
+        group = GroupService.get_group_or_404(db, owner, group_id)
+        events = GroupService.list_events(db, owner, group.id)
+        target_language = owner.preferred_language or group.default_language
+        translation_cache: dict[str, str] = {}
+
+        return [
+            GroupService.serialize_event_for_language(
+                event=event,
+                target_language=target_language,
+                translation_cache=translation_cache,
+            )
+            for event in events
+        ]
 
     @staticmethod
     def upsert_presence(
@@ -477,6 +505,32 @@ class GroupService:
             "is_typing": presence.is_typing,
             "last_seen": presence.last_seen.isoformat(),
             "updated_at": presence.updated_at.isoformat(),
+        }
+
+    @staticmethod
+    def serialize_event_for_language(
+        *,
+        event: GroupNoteEvent,
+        target_language: str,
+        translation_cache: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        cache = translation_cache or {}
+        delivered_text, delivered_language = GroupService.translate_live_event_for_language(
+            event=event,
+            target_language=target_language,
+            translation_cache=cache,
+        )
+
+        return {
+            "id": str(event.id),
+            "group_id": str(event.group_id),
+            "sender_id": str(event.sender_id),
+            "original_text": event.original_text,
+            "original_language": event.original_language,
+            "translated_text": delivered_text,
+            "translated_language": delivered_language,
+            "event_type": event.event_type,
+            "created_at": event.created_at.isoformat(),
         }
 
     @staticmethod

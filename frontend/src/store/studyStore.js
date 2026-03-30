@@ -580,7 +580,7 @@ export const useStudyStore = create((set, get) => ({
 
   createGroupEvent: async (groupId, payload) => {
     const event = await groupsApi.createEvent(groupId, payload)
-    set((state) => ({ groupEvents: [...state.groupEvents, event] }))
+    set((state) => ({ groupEvents: upsertGroupEvent(state.groupEvents, event) }))
     return event
   },
 
@@ -623,7 +623,7 @@ export const useStudyStore = create((set, get) => ({
       }
       if (payload.type === 'group_note_event') {
         set((state) => ({
-          groupEvents: [...state.groupEvents, payload],
+          groupEvents: upsertGroupEvent(state.groupEvents, payload),
         }))
       }
       onMessage?.(payload)
@@ -645,7 +645,9 @@ export const useStudyStore = create((set, get) => ({
     const socket = get().socket
     if (socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(payload))
+      return true
     }
+    return false
   },
 
   disconnectGroupSocket: () => {
@@ -663,5 +665,21 @@ const upsertByUserId = (items, incoming) => {
     const leftDate = new Date(left.updated_at ?? 0).getTime()
     const rightDate = new Date(right.updated_at ?? 0).getTime()
     return rightDate - leftDate
+  })
+}
+
+const getGroupEventId = (event) => event.event_id ?? event.id ?? null
+
+const upsertGroupEvent = (items, incoming) => {
+  const incomingId = getGroupEventId(incoming)
+  if (!incomingId) {
+    return [...items, incoming]
+  }
+
+  const next = items.filter((item) => getGroupEventId(item) !== incomingId)
+  return [...next, incoming].sort((left, right) => {
+    const leftDate = new Date(left.created_at ?? 0).getTime()
+    const rightDate = new Date(right.created_at ?? 0).getTime()
+    return leftDate - rightDate
   })
 }

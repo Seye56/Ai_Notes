@@ -84,7 +84,7 @@ def list_group_events(
     db: Session = Depends(get_db),
     current_profile: Profile = Depends(get_current_profile),
 ) -> list[GroupEventRead]:
-    events = GroupService.list_events(db, current_profile, group_id)
+    events = GroupService.list_events_for_viewer(db, current_profile, group_id)
     return [GroupEventRead.model_validate(event) for event in events]
 
 

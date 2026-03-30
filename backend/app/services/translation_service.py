@@ -13,6 +13,49 @@ from app.services.note_service import NoteService
 
 class TranslationService:
     @staticmethod
+    def detect_language(
+        *,
+        text: str,
+        fallback_language: str | None = None,
+    ) -> str:
+        if not settings.claude_api_key:
+            return (fallback_language or "en").strip().lower()
+
+        normalized_fallback = (fallback_language or "en").strip().lower()
+        if not text.strip():
+            return normalized_fallback
+
+        try:
+            from anthropic import Anthropic
+        except ImportError:
+            return normalized_fallback
+
+        client = Anthropic(api_key=settings.claude_api_key)
+        prompt = (
+            "Detect the language of the following message.\n"
+            "Return only the ISO 639-1 language code in lowercase.\n"
+            f"If detection is uncertain, return {normalized_fallback}.\n\n"
+            f"Message:\n{text}"
+        )
+
+        try:
+            response = client.messages.create(
+                model=settings.claude_model,
+                max_tokens=16,
+                temperature=0,
+                system="You are a precise language detector.",
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception:
+            return normalized_fallback
+
+        detected_language = TranslationService._extract_text_from_claude_response(response).strip().lower()
+        if not detected_language:
+            return normalized_fallback
+
+        return detected_language.split()[0]
+
+    @staticmethod
     def translate_note(
         db: Session,
         owner: Profile,
